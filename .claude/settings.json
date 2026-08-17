@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "autoMode": {
+    "hard_deny": [
+      "$defaults",
+      "git push*",
+      "git push --force*",
+      "git push -f*",
+      "git reset --hard*",
+      "git clean -f*",
+      "git filter-branch*",
+      "git branch -D*",
+      "rm -rf*",
+      "rm -r -f*"
+    ],
+    "soft_deny": [
+      "$defaults"
+    ],
+    "allow": [
+      "$defaults"
+    ]
+  },
+  "skipAutoPermissionPrompt": true
+}
