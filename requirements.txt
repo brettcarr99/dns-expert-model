@@ -1,0 +1,4 @@
+lancedb==0.36.0
+pyarrow==25.0.0
+ollama==0.6.2
+docutils==0.23

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sysctl -n machdep.cpu.brand_string)",
+      "Bash(system_profiler SPHardwareDataType)",
+      "Bash(ollama --version)",
+      "Bash(ollama list *)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -m pip list)",
+      "Bash(ollama pull *)",
+      "Bash(kill -0 25059)",
+      "Bash(kill -0 37191)",
+      "Bash(ollama create *)",
+      "Bash(kill -0 42771)",
+      "Bash(ps -p 42771 -o etime=)",
+      "Bash(ollama ps *)",
+      "Bash(ps -p 42771 -o pid,etime,time)",
+      "Bash(kill -0 67997)",
+      "Skill(claude-api)",
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(shuf -n 500)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}
