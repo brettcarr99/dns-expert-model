@@ -15,10 +15,11 @@ Two things:
 1. **It runs entirely on your own machine.** Nothing you type gets sent
    anywhere over the internet. No account, no API key, no cloud service.
 2. **It looks things up before answering, instead of relying on memory.**
-   Before every answer, it searches a local library of ~200 DNS-related RFCs
-   and the official documentation for all ten server products, pulls the
-   relevant passages, and bases its answer on those — citing exactly which
-   RFC section or doc page it used. This matters because plain chatbots
+   Before every answer, it searches a local library of ~200 DNS-related RFCs,
+   the official documentation for all ten server products, and a decade of
+   IETF/DNS-OARC/RIPE mailing list discussion, pulls the relevant passages,
+   and bases its answer on those — citing exactly which RFC section, doc
+   page, or mailing list post it used. This matters because plain chatbots
    frequently get exact syntax, default values, and RFC details wrong; this
    one is built specifically to reduce that.
 
@@ -39,6 +40,11 @@ Two things:
   actual protocol behavior.
 - **Comparing how different servers handle the same thing** — e.g. "How does
   zone-transfer ACL syntax differ between BIND9 and Knot DNS?"
+- **"What was the argument about X in the DNS community?"** — e.g. "What
+  concerns were raised about QNAME minimization on the IETF dnsop list?",
+  "Who's argued against wide adoption of DNS-over-HTTPS, and why?" It can
+  pull up specific mailing list threads, name who said what and when, and
+  summarize a debate — but see the note on trusting this below.
 
 ## What it's not good for
 
@@ -52,6 +58,13 @@ Two things:
 - Company-specific or environment-specific config — it doesn't know your
   actual infrastructure. Treat generated configs as a correct *starting
   point* to adapt, not something to paste into production unread.
+- **Treating mailing list opinions as official policy.** RFCs and vendor
+  docs are normative; mailing list posts are individual engineers arguing,
+  proposing, and disagreeing at a point in time. It's instructed to
+  attribute mailing list claims to the person and date rather than
+  presenting them as settled fact, and to say plainly if you ask what a
+  working group "decided" and the retrieved posts only show discussion, not
+  a decision — but always read who said it before treating it as consensus.
 
 ## One-time setup
 

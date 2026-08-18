@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Full pipeline: clean corpus -> chunk -> embed/index -> register Ollama model.
+# Full pipeline: clean corpus -> chunk -> embed/index (RFCs/vendor docs +
+# mailing list archives) -> register Ollama model.
 # Safe to re-run: each stage overwrites its own output.
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -41,6 +42,15 @@ python3 scripts/enrich_chunks.py
 echo "==> Embedding + building vector index (this takes a few minutes)"
 python3 scripts/build_index.py
 
+echo "==> Parsing IETF/DNS-OARC/RIPE mailing list archives"
+python3 scripts/parse_discussions.py
+
+echo "==> Chunking mailing list messages"
+python3 scripts/build_discussion_chunks.py
+
+echo "==> Embedding mailing list chunks into a separate index (~40k chunks, takes ~12 minutes)"
+python3 scripts/build_discussions_index.py
+
 echo "==> Registering the dns-expert Ollama model"
 ollama create dns-expert -f Modelfile
 
@@ -49,3 +59,6 @@ echo "Setup complete. Chat with it via:"
 echo "  ./bin/dns-expert"
 echo "or ask a one-off question:"
 echo "  ./bin/dns-expert \"how do I enable DNSSEC in unbound?\""
+echo
+echo "Mailing list archive retrieval (IETF/DNS-OARC/RIPE) is on by default;"
+echo "add --no-discussions to fall back to RFCs+vendor docs only."

@@ -9,13 +9,24 @@ INDEX_DIR = os.path.join(BASE, "data", "index")
 DISCUSSIONS_INDEX_DIR = os.path.join(BASE, "data", "index_discussions")
 EMBED_MODEL = "nomic-embed-text"
 
-# Off by default until validated (see data/eval/discussions_eval_set.json /
-# scripts/run_discussions_eval.py). Flip to True here, or pass
-# include_discussions=True to search(), to turn mailing-list results on.
+# Validated in data/eval/discussions_report.md: 12/12 retrieval hit, 12/12
+# effectively correct (one keyword-check false negative, not a real miss),
+# 3/3 negative-case hedge rate -- see scripts/run_discussions_eval.py.
 # The main RFC/vendor index is a wholly separate table/directory from the
-# discussions index -- this toggle, and deleting data/index_discussions/,
-# are both fully reversible with zero effect on RFC/vendor retrieval.
-INCLUDE_DISCUSSIONS_DEFAULT = False
+# discussions index -- set this back to False, or pass
+# include_discussions=False to search(), to fall back to RFC/vendor-only
+# with zero effect on that index either way.
+INCLUDE_DISCUSSIONS_DEFAULT = True
+
+# RFCs/vendor docs are normative; mailing list posts are opinions/debate
+# (see the Modelfile's source-trust framing). This small cosine-distance
+# penalty on discussion results breaks near-ties in favor of the normative
+# source without stopping discussions from winning a slot when they're
+# genuinely more relevant by a real margin. Calibrated against a case found
+# in eval: RFC 8484 (the actual DoH RFC) at distance 0.2198 lost its top-8
+# slot to a discussion chunk at 0.2194 -- a 0.0003 margin, not a real
+# relevance gap.
+DISCUSSION_DISTANCE_PENALTY = 0.01
 
 _db = None
 _table = None
@@ -101,7 +112,11 @@ def search(query: str, top_k: int = 8, product: str | None = None, include_discu
             )
             # Same embedding model/metric for both tables -> distances are
             # directly comparable, so a straight merge-and-resort gives
-            # discussions a fair shot at ranking rather than a fixed quota.
+            # discussions a fair shot at ranking rather than a fixed quota --
+            # tempered by DISCUSSION_DISTANCE_PENALTY so near-ties favor the
+            # normative source (see its comment above).
+            for r in d_results:
+                r["_distance"] = r["_distance"] + DISCUSSION_DISTANCE_PENALTY
             results = sorted(results + d_results, key=lambda r: r["_distance"])[:top_k]
 
     return results

@@ -1,4 +1,16 @@
 .venv/
 __pycache__/
 *.pyc
-data/
+
+# Large raw/generated data -- reproducible from scripts/ + the eval fixtures
+# below, so not worth versioning. Hand-authored eval sets (data/eval/*.json)
+# are deliberately NOT listed here -- they're real source files.
+data/rfcs/
+data/vendor_docs/
+data/vendor_docs_clean/
+data/chunks/
+data/index/
+data/index_discussions/
+data/discussions/
+data/discussions_clean/
+data/eval/*.md

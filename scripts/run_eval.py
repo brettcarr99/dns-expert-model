@@ -61,9 +61,14 @@ def run_case(client, case):
     answer_lower = answer.lower()
     answer_lower_nocomma = answer_lower.replace(",", "")
 
-    top_sources = [
-        (f"RFC {r['rfc']}" if r["source_type"] == "rfc" else r["product"]) for r in results[:5]
-    ]
+    def _source_label(r):
+        if r["source_type"] == "rfc":
+            return f"RFC {r['rfc']}"
+        if r["source_type"] == "discussion":
+            return f"{r['list']} ({r['date']})"
+        return r["product"]
+
+    top_sources = [_source_label(r) for r in results[:5]]
 
     if case["type"] == "negative":
         hedged = any(p in answer_lower for p in HEDGE_PHRASES)

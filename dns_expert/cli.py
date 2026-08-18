@@ -65,8 +65,9 @@ def main():
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model name (default: dns-expert)")
     parser.add_argument("--top-k", type=int, default=TOP_K, help="Number of chunks to retrieve per turn")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print retrieved chunk sources")
-    parser.add_argument("--discussions", action="store_true",
-                         help="Also retrieve from IETF/DNS-OARC/RIPE mailing list archives (off by default)")
+    parser.add_argument("--no-discussions", dest="discussions", action="store_false",
+                         help="Disable retrieval from IETF/DNS-OARC/RIPE mailing list archives (on by default)")
+    parser.set_defaults(discussions=True)
     parser.add_argument("question", nargs="*", help="Ask a single question and exit (non-interactive)")
     args = parser.parse_args()
 
