@@ -37,7 +37,10 @@
       "Bash(ps -p 43735 -o pid,etime=)",
       "Bash(kill -0 57252)",
       "Bash(git check-ignore *)",
-      "Bash(echo \"---exit:$?---\")"
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(timeout 90 ./bin/dns-expert -v \"What TCP port does DNS-over-HTTPS use by default?\")",
+      "Bash(./bin/dns-expert -v \"What TCP port does DNS-over-HTTPS use by default?\")",
+      "Bash(git commit *)"
     ]
   }
 }
