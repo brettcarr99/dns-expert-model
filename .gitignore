@@ -2,10 +2,15 @@
 __pycache__/
 *.pyc
 
-# Large raw/generated data -- reproducible from scripts/ + the eval fixtures
-# below, so not worth versioning. Hand-authored eval sets (data/eval/*.json)
-# are deliberately NOT listed here -- they're real source files.
-data/rfcs/
+# Large raw/generated data -- reproducible from scripts/ + the source
+# fixtures below, so not worth versioning. Hand-authored eval sets
+# (data/eval/*.json) and the curated DNS-RFC list
+# (data/rfcs/metadata/dns_rfcs_filtered.json -- required input for
+# download_rfcs.py, not reproducible by filter_rfcs.py without its original
+# ephemeral inputs, see that script's docstring) are deliberately NOT
+# excluded -- they're real source files, not bulk downloaded content.
+data/rfcs/raw/
+data/rfcs/clean/
 data/vendor_docs/
 data/vendor_docs_clean/
 data/chunks/

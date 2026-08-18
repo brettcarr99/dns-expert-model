@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Full pipeline: clean corpus -> chunk -> embed/index (RFCs/vendor docs +
-# mailing list archives) -> register Ollama model.
-# Safe to re-run: each stage overwrites its own output.
+# Fast path: download RFCs + vendor docs -> clean -> chunk -> embed/index ->
+# register the Ollama model. Gets you a working dns-expert in ~20-40 minutes.
+# Safe to re-run: each stage overwrites its own output / skips already-fetched files.
+#
+# Mailing list archives (IETF/DNS-OARC/RIPE) are a SEPARATE, much slower step
+# -- see scripts/setup_discussions.sh. This script alone is enough to use
+# dns-expert; discussions retrieval silently does nothing until that index
+# exists (dns_expert/retrieval.py degrades gracefully if data/index_discussions/
+# is missing), so there's no need to run it first.
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
@@ -27,6 +33,12 @@ ollama pull lfm2.5:8b-a1b-q4_K_M
 
 export PYTHONPATH="$DIR:${PYTHONPATH:-}"
 
+echo "==> Downloading RFCs (~207 files, a couple of minutes)"
+python3 scripts/download_rfcs.py
+
+echo "==> Downloading vendor docs (~664 files across 11 products)"
+python3 scripts/download_vendor_docs.py
+
 echo "==> Cleaning RFCs"
 python3 scripts/clean_rfcs.py
 
@@ -42,15 +54,6 @@ python3 scripts/enrich_chunks.py
 echo "==> Embedding + building vector index (this takes a few minutes)"
 python3 scripts/build_index.py
 
-echo "==> Parsing IETF/DNS-OARC/RIPE mailing list archives"
-python3 scripts/parse_discussions.py
-
-echo "==> Chunking mailing list messages"
-python3 scripts/build_discussion_chunks.py
-
-echo "==> Embedding mailing list chunks into a separate index (~40k chunks, takes ~12 minutes)"
-python3 scripts/build_discussions_index.py
-
 echo "==> Registering the dns-expert Ollama model"
 ollama create dns-expert -f Modelfile
 
@@ -60,5 +63,8 @@ echo "  ./bin/dns-expert"
 echo "or ask a one-off question:"
 echo "  ./bin/dns-expert \"how do I enable DNSSEC in unbound?\""
 echo
-echo "Mailing list archive retrieval (IETF/DNS-OARC/RIPE) is on by default;"
-echo "add --no-discussions to fall back to RFCs+vendor docs only."
+echo "Want it to also answer questions about a decade of IETF/DNS-OARC/RIPE"
+echo "mailing list discussion? That's a separate, much slower step (the IETF"
+echo "archive scraper paces itself respectfully, so it can take 10+ hours --"
+echo "good to kick off overnight):"
+echo "  ./scripts/setup_discussions.sh"

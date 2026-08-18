@@ -82,13 +82,29 @@ your Mac/Linux box — check with `python3 --version` in a terminal).
    ```
 
    This will take a while the first time (it's downloading a ~19GB AI model
-   and building a searchable index out of all the RFCs and docs — expect
-   10-30 minutes depending on your internet connection). You'll see progress
-   messages the whole way; it's safe to walk away and come back. It needs
-   about 25GB of free disk space.
+   and building a searchable index out of all the RFCs and vendor docs —
+   expect 20-40 minutes depending on your internet connection). You'll see
+   progress messages the whole way; it's safe to walk away and come back. It
+   needs about 25GB of free disk space.
 
-3. When it says "Setup complete," you're done. You won't need to repeat this
-   step again unless you delete the project or want to refresh the corpus.
+3. When it says "Setup complete," you're done and can start using it — see
+   *Everyday use* below. You won't need to repeat this step again unless you
+   delete the project or want to refresh the corpus.
+
+4. **Optional, and much slower:** if you also want it to answer questions
+   about a decade of IETF/DNS-OARC/RIPE mailing list discussion (not just
+   RFCs and vendor docs), run:
+
+   ```bash
+   ./scripts/setup_discussions.sh
+   ```
+
+   This is a genuinely long process — it downloads mailing list archives at
+   a deliberately slow, polite pace so it doesn't hammer the IETF's mail
+   server, and can realistically take **10+ hours** for the largest list
+   alone. Kick it off before you go to bed, or just skip it — everything in
+   this guide works fine without it, and `dns-expert` quietly falls back to
+   RFCs + vendor docs only until this step has been run.
 
 ## Everyday use
 
@@ -149,17 +165,19 @@ so you can sanity-check the sources yourself.
 - **"model not found" error** — setup didn't finish; re-run
   `./scripts/setup.sh`.
 
-## Where the knowledge comes from (and what's deliberately left out)
+## Where the knowledge comes from
 
 Everything it can cite comes from:
 - ~200 DNS-relevant RFCs (official protocol specifications)
 - Official documentation for BIND9, PowerDNS (Authoritative + Recursor),
   dnsdist, Knot DNS, Knot Resolver, Unbound, NSD, CoreDNS, dnsmasq, and
   Technitium
-
-Mailing list discussions (IETF working groups, DNS-OARC, RIPE) are
-deliberately **not** included yet — they're noisier and less authoritative
-than RFCs and official docs, so they were left out of the first version.
+- A decade (2016-2026) of IETF dnsop/dns-privacy/dd, DNS-OARC
+  dns-operations, and RIPE DNS WG mailing list discussion — *if* you've run
+  `./scripts/setup_discussions.sh` (see One-time setup above; it's optional
+  and slow, so this may not be built yet on a fresh install). See the note
+  under "What it's not good for" above on how to read mailing list
+  citations — they're opinions and debate, not settled fact.
 
 ## Want more technical detail?
 

@@ -1,3 +1,15 @@
+"""One-time provenance script: how data/rfcs/metadata/dns_rfcs_filtered.json
+(the curated list of DNS-relevant RFC numbers that download_rfcs.py reads)
+was originally produced. NOT part of the regular pipeline and not
+re-runnable as-is -- SCRATCH points at an ephemeral session directory that
+held two inputs never checked into this repo: a hand/AI-curated list of
+DNS-relevant RFC identifiers ("dns-camel" annotations) and the official
+IETF rfc-index.xml. dns_rfcs_filtered.json itself IS checked in (see
+.gitignore) since it's a small, curated source file, not bulk downloaded
+content -- so you don't need to run this script to use the project; it's
+kept only to document how that file was derived, in case you want to
+regenerate it against your own RFC-relevance list or a refreshed rfc-index.
+"""
 import json, re, xml.etree.ElementTree as ET
 
 SCRATCH = "/private/tmp/claude-501/-Users-brettcarr-Library-Mobile-Documents-com-apple-CloudDocs-ai-claude/e0d9bfa9-3b7d-48f4-8685-33f3c912ec46/scratchpad"

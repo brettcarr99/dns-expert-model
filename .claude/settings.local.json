@@ -40,7 +40,12 @@
       "Bash(echo \"---exit:$?---\")",
       "Bash(timeout 90 ./bin/dns-expert -v \"What TCP port does DNS-over-HTTPS use by default?\")",
       "Bash(./bin/dns-expert -v \"What TCP port does DNS-over-HTTPS use by default?\")",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(gh auth *)",
+      "Bash(gh api *)",
+      "Bash(chmod +x \"/Users/brettcarr/claude/dns-expert-model/scripts/setup.sh\" \"/Users/brettcarr/claude/dns-expert-model/scripts/setup_discussions.sh\")",
+      "Bash(bash -n \"/Users/brettcarr/claude/dns-expert-model/scripts/setup.sh\")",
+      "Bash(bash -n \"/Users/brettcarr/claude/dns-expert-model/scripts/setup_discussions.sh\")"
     ]
   }
 }

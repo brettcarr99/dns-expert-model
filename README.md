@@ -24,26 +24,39 @@ citation instructions in the system prompt. See
 `dns_expert/retrieval.py` for the retrieval logic.
 
 Pipeline:
-1. `scripts/clean_rfcs.py` — strip RFC-editor pagination boilerplate
-2. `scripts/clean_vendor_docs.py` — normalize rst/md/html vendor docs to plain text
-3. `scripts/build_chunks.py` — section-aware chunking with citation breadcrumbs (~11.8k chunks)
-4. `scripts/enrich_chunks.py` — for short/terse chunks (config directive references etc,
+1. `scripts/download_rfcs.py` — fetches ~207 DNS-relevant RFCs (numbers curated in
+   `data/rfcs/metadata/dns_rfcs_filtered.json`) from rfc-editor.org -> `data/rfcs/raw/`
+2. `scripts/download_vendor_docs.py` — fetches vendor docs for all 11 products from
+   their GitHub repos (+ 2 direct-download sources) -> `data/vendor_docs/`
+3. `scripts/clean_rfcs.py` — strip RFC-editor pagination boilerplate
+4. `scripts/clean_vendor_docs.py` — normalize rst/md/html vendor docs to plain text
+5. `scripts/build_chunks.py` — section-aware chunking with citation breadcrumbs (~11.8k chunks)
+6. `scripts/enrich_chunks.py` — for short/terse chunks (config directive references etc,
    ~1.2k of them), generates a one-sentence natural-language paraphrase locally
    (`lfm2.5:8b`) and inserts it into the chunk text, so embeddings align better with
    how users actually phrase questions -> `data/chunks/chunks_enriched.jsonl`
-5. `scripts/build_index.py` — embed via `nomic-embed-text`, store in local LanceDB (`data/index/`).
+7. `scripts/build_index.py` — embed via `nomic-embed-text`, store in local LanceDB (`data/index/`).
    Deliberately brute-force cosine search, no ANN index — see Known limitations.
-6. `scripts/parse_discussions.py` — parses `.eml` files and gzipped mbox digests from
-   `data/discussions/` (IETF dnsop/dns-privacy/dd, DNS-OARC, RIPE DNS WG), strips
-   quoted-reply chains/signatures/list-footer boilerplate, drops auto-generated bot
-   messages and near-empty replies -> `data/discussions_clean/*.jsonl`
-7. `scripts/build_discussion_chunks.py` — chunks cleaned messages with citation
-   breadcrumbs (list, date, author, subject) -> `data/chunks/discussions_chunks.jsonl`
-8. `scripts/build_discussions_index.py` — embeds into a **separate** LanceDB table
-   (`data/index_discussions/`) so it's fully independent of the RFC/vendor index;
-   deleting this directory has zero effect on the rest of the system
-9. `Modelfile` — DNS-expert system prompt layered over `qwen2.5:32b-instruct`, registered as Ollama model `dns-expert`
-10. `dns_expert/cli.py` / `dns_expert/retrieval.py` — retrieves top-k chunks per turn
+
+Steps 1-7 are `scripts/setup.sh`. Mailing list archives are a separate,
+much slower opt-in step (`scripts/setup_discussions.sh`, see Setup below):
+
+8. `scripts/download_ietf_discussions.py` / `download_dns_oarc_discussions.py` /
+   `download_ripe_discussions.py` — fetch IETF dnsop/dns-privacy/dd, DNS-OARC
+   dns-operations, and RIPE DNS WG archives (2016-2026) -> `data/discussions/`
+9. `scripts/parse_discussions.py` — parses `.eml` files and gzipped mbox digests,
+   strips quoted-reply chains/signatures/list-footer boilerplate, drops
+   auto-generated bot messages and near-empty replies -> `data/discussions_clean/*.jsonl`
+11. `scripts/build_discussion_chunks.py` — chunks cleaned messages with citation
+    breadcrumbs (list, date, author, subject) -> `data/chunks/discussions_chunks.jsonl`
+12. `scripts/build_discussions_index.py` — embeds into a **separate** LanceDB table
+    (`data/index_discussions/`) so it's fully independent of the RFC/vendor index;
+    deleting this directory has zero effect on the rest of the system
+
+Not tied to either path above:
+
+13. `Modelfile` — DNS-expert system prompt layered over `qwen2.5:32b-instruct`, registered as Ollama model `dns-expert`
+14. `dns_expert/cli.py` / `dns_expert/retrieval.py` — retrieves top-k chunks per turn
     (merging in mailing-list results by raw cosine distance when enabled — same
     embedding model for both indexes, so distances are directly comparable), streams
     a grounded answer
@@ -59,10 +72,27 @@ disk (base model + embedding model + corpus + index).
 ./scripts/setup.sh
 ```
 
-This creates a venv, installs dependencies, pulls `nomic-embed-text` and
-`qwen2.5:32b-instruct`, runs the full cleaning/chunking/embedding pipeline, and
-registers the `dns-expert` Ollama model. Safe to re-run — every stage
-overwrites its own output.
+This creates a venv, installs dependencies, pulls `nomic-embed-text`,
+`qwen2.5:32b-instruct`, and `lfm2.5:8b`, downloads the RFC + vendor-doc corpus,
+runs the full cleaning/chunking/embedding pipeline, and registers the
+`dns-expert` Ollama model. Takes roughly 20-40 minutes depending on your
+connection (most of that is the one-time chunk-enrichment pass — see
+"How it works" above). Safe to re-run — every stage overwrites its own
+output or skips files it already has.
+
+**Optional, separate, much slower:** mailing list archive retrieval
+(IETF dnsop/dns-privacy/dd, DNS-OARC, RIPE DNS WG — a decade of discussion).
+Run this whenever, it's independent of everything above:
+
+```bash
+./scripts/setup_discussions.sh
+```
+
+This paces its IETF archive requests respectfully (~1.2-2s each with
+backoff), so it can realistically take **10+ hours** for dnsop's ~21,000
+messages alone — start it and leave it running (e.g. overnight), it's safe
+to interrupt and resume. `dns-expert` works fully without this step;
+mailing-list retrieval just does nothing until the index exists.
 
 ## Usage
 
@@ -241,3 +271,14 @@ RFC/vendor index — see `dns_expert/retrieval.py`'s `INCLUDE_DISCUSSIONS_DEFAUL
   excerpts are instructed to be attributed to the person/date and never
   presented as settled consensus, since (unlike RFCs/vendor docs) they're
   individual opinions and debate, not normative specification.
+
+## License
+
+The code in this repository (scripts, `dns_expert/`, `Modelfile`) is MIT
+licensed — see `LICENSE`. It's not distributing anyone else's copyrighted
+content: the downloaded corpus (RFCs, vendor docs, mailing list archives)
+lives under `data/`, which is gitignored and fetched fresh by each user
+running the setup scripts against the original public sources (rfc-editor.org,
+each vendor's own GitHub repo/site, and the IETF/DNS-OARC/RIPE mail archives),
+under whatever terms those sources publish it. Check the applicable license
+before redistributing anything you download.
