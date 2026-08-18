@@ -74,37 +74,38 @@ your Mac/Linux box — check with `python3 --version` in a terminal).
 
 1. Install Ollama from **https://ollama.com** (download, open the installer,
    follow the prompts — same as installing any desktop app).
-2. Open a terminal, go to this project folder, and run the setup script:
+2. Open a terminal, go to this project folder, and run:
 
    ```bash
    cd path/to/dns-expert-model
-   ./scripts/setup.sh
+   ./scripts/quickstart.sh
    ```
 
-   This will take a while the first time (it's downloading a ~19GB AI model
-   and building a searchable index out of all the RFCs and vendor docs —
-   expect 20-40 minutes depending on your internet connection). You'll see
-   progress messages the whole way; it's safe to walk away and come back. It
-   needs about 25GB of free disk space.
+   This downloads the AI model (~19GB, from Ollama directly) and a
+   **pre-built search index** covering ~207 RFCs, 664 vendor doc files, and
+   a decade of IETF/DNS-OARC/RIPE mailing list discussion (~160MB,
+   downloaded already-processed — no re-scraping or re-downloading any of
+   the source material yourself). Expect roughly 15-30 minutes depending on
+   your connection. It needs about 25GB of free disk space.
 
-3. When it says "Setup complete," you're done and can start using it — see
-   *Everyday use* below. You won't need to repeat this step again unless you
-   delete the project or want to refresh the corpus.
+3. When it says "Setup complete," you're done — see *Everyday use* below.
 
-4. **Optional, and much slower:** if you also want it to answer questions
-   about a decade of IETF/DNS-OARC/RIPE mailing list discussion (not just
-   RFCs and vendor docs), run:
+That's it — everything the model can cite is already baked into that
+downloaded index. You don't need to run anything else.
 
-   ```bash
-   ./scripts/setup_discussions.sh
-   ```
+<details>
+<summary>Building the index yourself instead of downloading it (optional, much slower)</summary>
 
-   This is a genuinely long process — it downloads mailing list archives at
-   a deliberately slow, polite pace so it doesn't hammer the IETF's mail
-   server, and can realistically take **10+ hours** for the largest list
-   alone. Kick it off before you go to bed, or just skip it — everything in
-   this guide works fine without it, and `dns-expert` quietly falls back to
-   RFCs + vendor docs only until this step has been run.
+If you'd rather build the search index from scratch on your own machine —
+to audit exactly what's in it, refresh it with newer RFCs/docs, or avoid
+downloading a pre-built binary from someone else — use `./scripts/setup.sh`
+(RFCs + vendor docs, ~20-40 minutes) and, separately, optionally,
+`./scripts/setup_discussions.sh` for the mailing list archives. That second
+one is a genuinely long process: it re-downloads mailing list archives at a
+deliberately slow, polite pace so it doesn't hammer the IETF's mail server,
+and can realistically take **10+ hours** for the largest list alone. Most
+people should just use `quickstart.sh` above instead.
+</details>
 
 ## Everyday use
 
@@ -157,13 +158,13 @@ so you can sanity-check the sources yourself.
 - **`ollama: command not found`** — Ollama isn't installed or isn't on your
   PATH; reinstall from ollama.com and restart your terminal.
 - **Setup hangs or fails partway through** — safe to just re-run
-  `./scripts/setup.sh` again; every step skips work it's already done and
-  picks up where it left off.
+  `./scripts/quickstart.sh` again; every step skips work it's already done
+  and picks up where it left off.
 - **Answers are slow (many seconds per response)** — normal on a laptop
   without a lot of memory; the model is large. It'll still be far faster
   than reading through raw RFCs by hand.
 - **"model not found" error** — setup didn't finish; re-run
-  `./scripts/setup.sh`.
+  `./scripts/quickstart.sh`.
 
 ## Where the knowledge comes from
 
@@ -173,9 +174,8 @@ Everything it can cite comes from:
   dnsdist, Knot DNS, Knot Resolver, Unbound, NSD, CoreDNS, dnsmasq, and
   Technitium
 - A decade (2016-2026) of IETF dnsop/dns-privacy/dd, DNS-OARC
-  dns-operations, and RIPE DNS WG mailing list discussion — *if* you've run
-  `./scripts/setup_discussions.sh` (see One-time setup above; it's optional
-  and slow, so this may not be built yet on a fresh install). See the note
+  dns-operations, and RIPE DNS WG mailing list discussion — included in the
+  pre-built index `quickstart.sh` downloads by default. See the note
   under "What it's not good for" above on how to read mailing list
   citations — they're opinions and debate, not settled fact.
 

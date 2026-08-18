@@ -66,33 +66,52 @@ Everything runs locally through Ollama — no cloud calls, no API keys.
 ## Setup
 
 Prerequisites: [Ollama](https://ollama.com) installed, Python 3.10+, ~25GB free
-disk (base model + embedding model + corpus + index).
+disk (base model + embedding model + pre-built index).
 
 ```bash
-./scripts/setup.sh
+./scripts/quickstart.sh
 ```
 
-This creates a venv, installs dependencies, pulls `nomic-embed-text`,
-`qwen2.5:32b-instruct`, and `lfm2.5:8b`, downloads the RFC + vendor-doc corpus,
-runs the full cleaning/chunking/embedding pipeline, and registers the
-`dns-expert` Ollama model. Takes roughly 20-40 minutes depending on your
-connection (most of that is the one-time chunk-enrichment pass — see
-"How it works" above). Safe to re-run — every stage overwrites its own
-output or skips files it already has.
+This is the path most people want. It creates a venv, installs Python
+dependencies, pulls `nomic-embed-text` and `qwen2.5:32b-instruct` from
+Ollama's registry, downloads the **pre-built vector indexes** (RFC/vendor +
+mailing-list discussion, ~162MB total, from this repo's
+[v1.0.0 release](https://github.com/brettcarr99/dns-expert-model/releases/tag/v1.0.0))
+instead of re-downloading and re-embedding ~207 RFCs + 664 vendor doc files
++ 31,576 mailing-list messages yourself, and registers the `dns-expert`
+Ollama model. Roughly 15-30 minutes depending on your connection. Safe to
+re-run — skips anything already downloaded.
 
-**Optional, separate, much slower:** mailing list archive retrieval
-(IETF dnsop/dns-privacy/dd, DNS-OARC, RIPE DNS WG — a decade of discussion).
-Run this whenever, it's independent of everything above:
+### Building the corpus from scratch instead (slower, for pipeline development)
+
+If you're modifying the pipeline itself, want to refresh the corpus with
+newer RFCs/docs, or just don't want to trust a pre-built binary index from
+someone else, rebuild it locally:
 
 ```bash
-./scripts/setup_discussions.sh
+./scripts/setup.sh              # RFCs + vendor docs, ~20-40 minutes
+./scripts/setup_discussions.sh  # mailing list archives, optional, separate
 ```
 
-This paces its IETF archive requests respectfully (~1.2-2s each with
-backoff), so it can realistically take **10+ hours** for dnsop's ~21,000
-messages alone — start it and leave it running (e.g. overnight), it's safe
-to interrupt and resume. `dns-expert` works fully without this step;
-mailing-list retrieval just does nothing until the index exists.
+`setup.sh` downloads the RFC + vendor-doc corpus, runs the full
+cleaning/chunking/embedding pipeline, and registers the model — same
+end state as `quickstart.sh`, just built locally instead of downloaded
+(most of the time is the one-time chunk-enrichment pass — see "How it
+works" above).
+
+`setup_discussions.sh` re-scrapes the mailing list archives that went into
+the pre-built discussions index. It paces its IETF archive requests
+respectfully (~1.2-2s each with backoff), so it can realistically take
+**10+ hours** for dnsop's ~21,000 messages alone — start it and leave it
+running (e.g. overnight), it's safe to interrupt and resume. Most people
+should use `quickstart.sh` instead; `dns-expert` works fully without this
+step either way, mailing-list retrieval just does nothing until an index
+(downloaded or built) exists at `data/index_discussions/`.
+
+**Rebuilding the release bundle after a pipeline change:** re-tar
+`data/index/` and `data/index_discussions/` and attach them to a new
+GitHub release (`gh release create`), then update `RELEASE_TAG` in
+`scripts/quickstart.sh` if you cut a new version tag.
 
 ## Usage
 
@@ -147,7 +166,7 @@ data/
   discussions_clean/            parsed + cleaned messages, one JSONL per list
   eval/                          eval sets + generated reports (RFC/vendor + discussions)
 dns_expert/                retrieval + CLI Python package
-scripts/                    pipeline stages + setup.sh + eval runners
+scripts/                    pipeline stages + quickstart.sh/setup.sh + eval runners
 Modelfile                   DNS-expert system prompt, layered on qwen2.5:32b-instruct
 bin/dns-expert               entry point
 ```

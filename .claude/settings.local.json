@@ -45,7 +45,20 @@
       "Bash(gh api *)",
       "Bash(chmod +x \"/Users/brettcarr/claude/dns-expert-model/scripts/setup.sh\" \"/Users/brettcarr/claude/dns-expert-model/scripts/setup_discussions.sh\")",
       "Bash(bash -n \"/Users/brettcarr/claude/dns-expert-model/scripts/setup.sh\")",
-      "Bash(bash -n \"/Users/brettcarr/claude/dns-expert-model/scripts/setup_discussions.sh\")"
+      "Bash(bash -n \"/Users/brettcarr/claude/dns-expert-model/scripts/setup_discussions.sh\")",
+      "Bash(gh repo *)",
+      "Bash(tar -czf /tmp/dns-expert-index.tar.gz -C data index)",
+      "Bash(tar -czf /tmp/dns-expert-discussions-index.tar.gz -C data index_discussions)",
+      "Read(//tmp/**)",
+      "Bash(chmod +x \"/Users/brettcarr/claude/dns-expert-model/scripts/quickstart.sh\")",
+      "Bash(gh release create v1.0.0 /tmp/dns-expert-index.tar.gz /tmp/dns-expert-discussions-index.tar.gz --title 'v1.0.0 — pre-built vector indexes' --notes 'Pre-built LanceDB vector indexes, so you don'\\\\''t have to re-download and re-embed the corpus yourself. *)",
+      "Bash(mkdir -p /tmp/dns-expert-quickstart-test)",
+      "Bash(curl -fL \"https://github.com/brettcarr99/dns-expert-model/releases/download/v1.0.0/dns-expert-index.tar.gz\" -o test-index.tar.gz -w \"HTTP %{http_code}, %{size_download} bytes\\\\n\")",
+      "Bash(mv data/index /tmp/dns-expert-index-backup)",
+      "Bash(mv data/index_discussions /tmp/dns-expert-discussions-index-backup)",
+      "Bash(./scripts/quickstart.sh)",
+      "Bash(./bin/dns-expert \"What port does DNS-over-TLS use?\")",
+      "Bash(git push *)"
     ]
   }
 }
