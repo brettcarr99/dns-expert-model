@@ -6,10 +6,21 @@ import ollama
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX_DIR = os.path.join(BASE, "data", "index")
+DISCUSSIONS_INDEX_DIR = os.path.join(BASE, "data", "index_discussions")
 EMBED_MODEL = "nomic-embed-text"
+
+# Off by default until validated (see data/eval/discussions_eval_set.json /
+# scripts/run_discussions_eval.py). Flip to True here, or pass
+# include_discussions=True to search(), to turn mailing-list results on.
+# The main RFC/vendor index is a wholly separate table/directory from the
+# discussions index -- this toggle, and deleting data/index_discussions/,
+# are both fully reversible with zero effect on RFC/vendor retrieval.
+INCLUDE_DISCUSSIONS_DEFAULT = False
 
 _db = None
 _table = None
+_discussions_db = None
+_discussions_table = None
 _client = None
 
 
@@ -19,6 +30,16 @@ def _get_table():
         _db = lancedb.connect(INDEX_DIR)
         _table = _db.open_table("chunks")
     return _table
+
+
+def _get_discussions_table():
+    global _discussions_db, _discussions_table
+    if _discussions_table is None:
+        if not os.path.isdir(DISCUSSIONS_INDEX_DIR):
+            return None
+        _discussions_db = lancedb.connect(DISCUSSIONS_INDEX_DIR)
+        _discussions_table = _discussions_db.open_table("chunks")
+    return _discussions_table
 
 
 def _get_client():
@@ -54,7 +75,10 @@ def detect_product_filter(query: str):
     return hits[0] if len(hits) == 1 else None
 
 
-def search(query: str, top_k: int = 8, product: str | None = None):
+def search(query: str, top_k: int = 8, product: str | None = None, include_discussions: bool | None = None):
+    if include_discussions is None:
+        include_discussions = INCLUDE_DISCUSSIONS_DEFAULT
+
     table = _get_table()
     client = _get_client()
 
@@ -65,6 +89,21 @@ def search(query: str, top_k: int = 8, product: str | None = None):
     if product:
         q = q.where(f"product = '{product}'", prefilter=True)
     results = q.limit(top_k).to_list()
+
+    if include_discussions:
+        d_table = _get_discussions_table()
+        if d_table is not None:
+            d_results = (
+                d_table.search(vector, vector_column_name="vector")
+                .metric("cosine")
+                .limit(top_k)
+                .to_list()
+            )
+            # Same embedding model/metric for both tables -> distances are
+            # directly comparable, so a straight merge-and-resort gives
+            # discussions a fair shot at ranking rather than a fixed quota.
+            results = sorted(results + d_results, key=lambda r: r["_distance"])[:top_k]
+
     return results
 
 
@@ -73,6 +112,14 @@ def format_context(results):
         return ""
     blocks = []
     for r in results:
-        source = f"RFC {r['rfc']}" if r["source_type"] == "rfc" else f"{r['product']} docs"
-        blocks.append(f"[{source} — {r['section'] or r['title']}]\n{r['text']}")
+        if r["source_type"] == "discussion":
+            source = f"{r['list']} mailing list, {r['date']}, {r['author']}"
+            heading = r["normalized_subject"]
+        elif r["source_type"] == "rfc":
+            source = f"RFC {r['rfc']}"
+            heading = r["section"] or r["title"]
+        else:
+            source = f"{r['product']} docs"
+            heading = r["section"] or r["title"]
+        blocks.append(f"[{source} — {heading}]\n{r['text']}")
     return "\n\n---\n\n".join(blocks)
