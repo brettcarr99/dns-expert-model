@@ -31,14 +31,18 @@ def print_banner(model_name: str, db_stats: Optional[Dict[str, Any]] = None) -> 
         console.print(f"[bold cyan]{BANNER}[/bold cyan]")
         info = f"[bold green]DNS-Expert v1.0.0[/bold green] | Model: [bold yellow]{model_name}[/bold yellow]"
         if db_stats and db_stats.get("total_chunks"):
-            info += f" | Knowledge Base: [bold magenta]{db_stats[total_chunks]}[/bold magenta] chunks ({db_stats.get(size_mb, 0)}MB)"
+            total_cnt = db_stats.get("total_chunks", 0)
+            size_mb = db_stats.get("size_mb", 0)
+            info += f" | Knowledge Base: [bold magenta]{total_cnt}[/bold magenta] chunks ({size_mb}MB)"
         console.print(Panel(info, border_style="cyan"))
         console.print("[dim]Type your question, or [bold]/help[/bold] for commands, [bold]/quit[/bold] to exit.[/dim]\n")
     else:
         print(BANNER)
         print(f"=== DNS-Expert v1.0.0 | Model: {model_name} ===")
         if db_stats and db_stats.get("total_chunks"):
-            print(f"Knowledge Base: {db_stats[total_chunks]} chunks ({db_stats.get(size_mb, 0)}MB)")
+            total_cnt = db_stats.get("total_chunks", 0)
+            size_mb = db_stats.get("size_mb", 0)
+            print(f"Knowledge Base: {total_cnt} chunks ({size_mb}MB)")
         print("Type your question, or /help for commands, /quit to exit.\n")
 
 
@@ -73,7 +77,7 @@ def render_sources(sources: List[Dict[str, Any]]) -> None:
     else:
         print("\n=== Retrieved Knowledge Sources ===")
         for idx, src in enumerate(sources, start=1):
-            print(f"[{idx}] {src.get(source_type, ).upper()} | {src.get(title)} | Section: {src.get(section)} (Score: {src.get(rrf_score)})")
+            print(f"[{idx}] {src.get('source_type', '').upper()} | {src.get('title')} | Section: {src.get('section')} (Score: {src.get('rrf_score')})")
         print("===================================\n")
 
 
