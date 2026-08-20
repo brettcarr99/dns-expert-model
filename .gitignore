@@ -1,21 +1,28 @@
-.venv/
+# Python artifacts
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Large raw/generated data -- reproducible from scripts/ + the source
-# fixtures below, so not worth versioning. Hand-authored eval sets
-# (data/eval/*.json) and the curated DNS-RFC list
-# (data/rfcs/metadata/dns_rfcs_filtered.json -- required input for
-# download_rfcs.py, not reproducible by filter_rfcs.py without its original
-# ephemeral inputs, see that script's docstring) are deliberately NOT
-# excluded -- they're real source files, not bulk downloaded content.
-data/rfcs/raw/
-data/rfcs/clean/
-data/vendor_docs/
-data/vendor_docs_clean/
-data/chunks/
-data/index/
-data/index_discussions/
-data/discussions/
-data/discussions_clean/
-data/eval/*.md
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# OS artifacts
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Raw Mailing list corpus (pre-indexed in dns_knowledge.db)
+discussions/
+rfcs/raw/
+.agents/
