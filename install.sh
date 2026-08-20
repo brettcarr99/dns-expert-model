@@ -170,18 +170,28 @@ fi
 
 "$VENV_DIR/bin/pip" install --quiet --upgrade pip
 "$VENV_DIR/bin/pip" install --quiet -e "$SCRIPT_DIR"
-echo -e "  ${GREEN}✓${NC} Dependencies (numpy, rich, prompt-toolkit) installed."
+echo -e "  ${GREEN}✓${NC} Dependencies installed."
 
 # ==============================================================================
-# PHASE 7: LINK CLI EXECUTABLE & DEPLOY PRE-BUNDLED DATABASE
+# PHASE 7: LINK CLI EXECUTABLE & DEPLOY ENCRYPTED KNOWLEDGE STORE
 # ==============================================================================
-echo -e "\n${CYAN}${BOLD}[7/7] Finalizing CLI executable and pre-bundled knowledge store...${NC}"
+echo -e "\n${CYAN}${BOLD}[7/7] Finalizing CLI executable and encrypted knowledge store...${NC}"
 mkdir -p "$HOME/.local/bin"
 mkdir -p "$HOME/.dns-expert"
 
-if [ -f "$SCRIPT_DIR/dns_knowledge.db" ] && [ ! -f "$HOME/.dns-expert/dns_knowledge.db" ]; then
-    echo -e "  -> Bundling pre-indexed knowledge base into ~/.dns-expert/dns_knowledge.db..."
-    cp "$SCRIPT_DIR/dns_knowledge.db" "$HOME/.dns-expert/dns_knowledge.db"
+# Auto-unpack encrypted binary container if present
+if [ -f "$SCRIPT_DIR/dns_knowledge.dat" ]; then
+    cp "$SCRIPT_DIR/dns_knowledge.dat" "$HOME/.dns-expert/dns_knowledge.dat"
+    echo -e "  -> Unpacking encrypted knowledge container into secure local runtime cache..."
+    "$VENV_DIR/bin/python" -c "
+from pathlib import Path
+from dns_expert.knowledge.crypto import decrypt_file
+src = Path('$HOME/.dns-expert/dns_knowledge.dat')
+dst = Path('$HOME/.dns-expert/dns_knowledge.db')
+if src.exists() and (not dst.exists() or dst.stat().st_size == 0):
+    decrypt_file(src, dst)
+"
+    echo -e "  ${GREEN}✓${NC} Knowledge vault unpacked successfully."
 fi
 
 cat << WRAPPER > "$HOME/.local/bin/dns-expert"

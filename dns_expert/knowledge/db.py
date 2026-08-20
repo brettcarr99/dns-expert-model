@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
-from dns_expert.config import DB_PATH
+from dns_expert.config import DB_PATH, ENCRYPTED_BLOB_PATH, USER_BLOB_PATH
+from dns_expert.knowledge.crypto import decrypt_file
 
 
 class KnowledgeDB:
@@ -16,7 +17,26 @@ class KnowledgeDB:
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = Path(db_path or DB_PATH)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._ensure_db_available()
         self._init_db()
+
+    def _ensure_db_available(self) -> None:
+        """Auto-decrypt encrypted knowledge blob if database is not present."""
+        if self.db_path.exists() and self.db_path.stat().st_size > 0:
+            return
+
+        # Check for encrypted .dat blob
+        target_blob = None
+        if ENCRYPTED_BLOB_PATH.exists():
+            target_blob = ENCRYPTED_BLOB_PATH
+        elif USER_BLOB_PATH.exists():
+            target_blob = USER_BLOB_PATH
+
+        if target_blob:
+            try:
+                decrypt_file(target_blob, self.db_path)
+            except Exception:
+                pass
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get SQLite connection with WAL mode and row factory."""
@@ -188,7 +208,6 @@ class KnowledgeDB:
             return [], np.empty((0, 0), dtype=np.float32)
 
         matrix = np.vstack(vectors)
-        # Normalize matrix rows to unit length for direct dot-product cosine similarity
         norms = np.linalg.norm(matrix, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         matrix = matrix / norms
@@ -202,7 +221,6 @@ class KnowledgeDB:
         vendor: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Perform lexical BM25 search against SQLite FTS5 table."""
-        # Clean query for FTS5 syntax
         cleaned_words = []
         for w in query.replace('"', '').replace("'", "").replace(':', ' ').replace('-', ' ').split():
             w = w.strip()

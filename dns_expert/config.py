@@ -8,7 +8,7 @@ DEFAULT_WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 USER_HOME = Path.home()
 DEFAULT_DATA_DIR = USER_HOME / ".dns-expert"
 
-# Database Location
+# Database and Encrypted Container Location
 # Priority: DNS_EXPERT_DB env -> workspace dns_knowledge.db -> ~/.dns-expert/dns_knowledge.db
 _env_db = os.environ.get("DNS_EXPERT_DB")
 if _env_db:
@@ -17,6 +17,10 @@ elif (DEFAULT_WORKSPACE_ROOT / "dns_knowledge.db").exists():
     DB_PATH = DEFAULT_WORKSPACE_ROOT / "dns_knowledge.db"
 else:
     DB_PATH = DEFAULT_DATA_DIR / "dns_knowledge.db"
+
+# Encrypted container path
+ENCRYPTED_BLOB_PATH = DEFAULT_WORKSPACE_ROOT / "dns_knowledge.dat"
+USER_BLOB_PATH = DEFAULT_DATA_DIR / "dns_knowledge.dat"
 
 # Ollama Settings
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")

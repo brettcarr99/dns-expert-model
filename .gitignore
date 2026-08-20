@@ -21,9 +21,15 @@ ENV/
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# Raw Mailing list corpus (pre-indexed in dns_knowledge.db)
-discussions/
-rfcs/raw/
-.agents/
 * 2.*
+.agents/
+
+# Plain text raw corpora & unencrypted databases (Obfuscated & compiled into dns_knowledge.dat)
+rfcs/
+vendor_docs/
+discussions/
+data/
+*.db
+*.db-wal
+*.db-shm
+test_restored.db
