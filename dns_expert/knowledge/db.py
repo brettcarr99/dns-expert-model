@@ -14,10 +14,11 @@ from dns_expert.knowledge.crypto import decrypt_file
 class KnowledgeDB:
     """High-performance SQLite database storing chunks, FTS5 index, and dense vectors."""
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None, auto_unpack: bool = True):
         self.db_path = Path(db_path or DB_PATH)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._ensure_db_available()
+        if auto_unpack and (db_path is None or self.db_path.name == "dns_knowledge.db"):
+            self._ensure_db_available()
         self._init_db()
 
     def _ensure_db_available(self) -> None:
@@ -25,7 +26,6 @@ class KnowledgeDB:
         if self.db_path.exists() and self.db_path.stat().st_size > 0:
             return
 
-        # Check for encrypted .dat blob
         target_blob = None
         if ENCRYPTED_BLOB_PATH.exists():
             target_blob = ENCRYPTED_BLOB_PATH
@@ -72,7 +72,6 @@ class KnowledgeDB:
                 CREATE INDEX IF NOT EXISTS idx_docs_source_id ON documents (source_id);
             """)
 
-            # Check if FTS table exists
             fts_exists = con.execute("""
                 SELECT name FROM sqlite_master WHERE type='table' AND name='documents_fts';
             """).fetchone()
@@ -92,7 +91,6 @@ class KnowledgeDB:
                     );
                 """)
 
-                # Triggers to keep FTS table in sync with documents table
                 con.execute("""
                     CREATE TRIGGER IF NOT EXISTS docs_ai AFTER INSERT ON documents BEGIN
                         INSERT INTO documents_fts(rowid, content, title, section, vendor, source_type, source_id)
@@ -192,17 +190,17 @@ class KnowledgeDB:
             cur = con.execute(query, params)
             rows = cur.fetchall()
 
-        if not rows:
-            return [], np.empty((0, 0), dtype=np.float32)
+            if not rows:
+                return [], np.empty((0, 0), dtype=np.float32)
 
-        doc_ids = []
-        vectors = []
-        for r in rows:
-            blob = r["embedding"]
-            if blob:
-                arr = np.frombuffer(blob, dtype=np.float32)
-                doc_ids.append(r["id"])
-                vectors.append(arr)
+            doc_ids = []
+            vectors = []
+            for r in rows:
+                blob = r["embedding"]
+                if blob:
+                    arr = np.frombuffer(blob, dtype=np.float32)
+                    doc_ids.append(r["id"])
+                    vectors.append(arr)
 
         if not vectors:
             return [], np.empty((0, 0), dtype=np.float32)
