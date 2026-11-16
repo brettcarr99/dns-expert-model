@@ -7,18 +7,73 @@ name = "dns-expert"
 version = "1.0.0"
 description = "Local AI Assistant and Knowledge Guidance System for DNS Engineers & Developers"
 readme = "README.md"
-authors = [{ name = "DNS Experts Community" }]
+authors = [{ name = "Brett Carr" }]
 license = { text = "MIT" }
 requires-python = ">=3.9"
+keywords = ["dns", "ai", "rag", "ollama", "llm", "networking", "rfc", "bind", "unbound", "powerdns"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Telecommunications Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: Name Service (DNS)",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Networking",
+]
 dependencies = [
-    "numpy>=1.20.0",
+    # NumPy: vector storage and cosine similarity in KnowledgeDB / HybridSearchEngine.
+    # Cap at <3 — NumPy 2.x removed deprecated aliases (np.bool, np.int, np.float)
+    # and changed array serialisation; pin until the codebase is audited against 2.x.
+    "numpy>=1.20.0,<3",
+    # Rich: optional terminal formatting in utils.py (graceful fallback if absent,
+    # but listed here so users get the full TUI experience by default).
     "rich>=12.0.0",
+    # Prompt Toolkit: readline-style history and auto-suggest in the interactive REPL.
+    # Optional at runtime (cli.py falls back to plain input()), declared here so the
+    # full REPL experience is available out-of-the-box.
     "prompt-toolkit>=3.0.0",
 ]
 
+[project.optional-dependencies]
+# Development / CI — install with: pip install -e ".[dev]"
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+# Corpus build pipeline — install with: pip install -e ".[build]"
+# (Additional scraping / download deps will be added here as the incremental
+# corpus-sync pipeline is implemented; see docs/ARCHITECTURE.md §8.)
+build = [
+    "requests>=2.31.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/brettcarr99/dns-expert-model"
+Repository = "https://github.com/brettcarr99/dns-expert-model"
+"Bug Tracker" = "https://github.com/brettcarr99/dns-expert-model/issues"
+Documentation = "https://github.com/brettcarr99/dns-expert-model/blob/main/docs/ARCHITECTURE.md"
+
 [project.scripts]
+# End-user REPL / query interface
 dns-expert = "dns_expert.cli:main"
+# Corpus builder — requires rfcs/, vendor_docs/, discussions/ source directories
+# (not shipped with the package; used to regenerate dns_knowledge.dat/db)
 dns-expert-builder = "dns_expert.knowledge.build_index:build_knowledge_base"
 
 [tool.setuptools.packages.find]
 include = ["dns_expert*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--tb=short -q"
