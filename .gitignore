@@ -34,3 +34,7 @@ data/
 *.db-shm
 test_restored.db
 .claude/
+
+# Encrypted knowledge vault — distributed via GitHub Releases, not committed to git
+# Download: https://github.com/brettcarr99/dns-expert-model/releases/latest
+dns_knowledge.dat

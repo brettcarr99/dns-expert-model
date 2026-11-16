@@ -179,19 +179,46 @@ echo -e "\n${CYAN}${BOLD}[7/7] Finalizing CLI executable and encrypted knowledge
 mkdir -p "$HOME/.local/bin"
 mkdir -p "$HOME/.dns-expert"
 
-# Auto-unpack encrypted binary container if present
-if [ -f "$SCRIPT_DIR/dns_knowledge.dat" ]; then
-    cp "$SCRIPT_DIR/dns_knowledge.dat" "$HOME/.dns-expert/dns_knowledge.dat"
-    echo -e "  -> Unpacking encrypted knowledge container into secure local runtime cache..."
+KNOWLEDGE_DAT="$HOME/.dns-expert/dns_knowledge.dat"
+KNOWLEDGE_DB="$HOME/.dns-expert/dns_knowledge.db"
+RELEASE_URL="https://github.com/brettcarr99/dns-expert-model/releases/latest/download/dns_knowledge.dat"
+
+if [ -f "$KNOWLEDGE_DB" ] && [ -s "$KNOWLEDGE_DB" ]; then
+    # Already decrypted from a previous install — nothing to do
+    echo -e "  ${GREEN}✓${NC} Knowledge vault already installed at ${KNOWLEDGE_DB}."
+else
+    # Acquire dns_knowledge.dat — three sources checked in order:
+    #   1. Local copy in repo dir  (dev checkout / air-gapped transfer)
+    #   2. Already downloaded to ~/.dns-expert  (re-install / interrupted download)
+    #   3. GitHub Releases download
+    if [ -f "$SCRIPT_DIR/dns_knowledge.dat" ]; then
+        echo -e "  -> Using local dns_knowledge.dat (dev / air-gapped mode)..."
+        cp "$SCRIPT_DIR/dns_knowledge.dat" "$KNOWLEDGE_DAT"
+    elif [ -f "$KNOWLEDGE_DAT" ] && [ -s "$KNOWLEDGE_DAT" ]; then
+        echo -e "  -> Found existing dns_knowledge.dat at ${KNOWLEDGE_DAT}."
+    else
+        echo -e "  -> Downloading encrypted knowledge vault from GitHub Releases (~40 MB)..."
+        if curl -fL --progress-bar -o "$KNOWLEDGE_DAT" "$RELEASE_URL"; then
+            echo -e "  ${GREEN}✓${NC} Knowledge vault downloaded."
+        else
+            echo -e "  ${RED}✗ Download failed.${NC}"
+            echo -e "    Manual download: https://github.com/brettcarr99/dns-expert-model/releases/latest"
+            echo -e "    Place dns_knowledge.dat at: ${KNOWLEDGE_DAT}"
+            echo -e "    Then re-run: ./install.sh"
+            exit 1
+        fi
+    fi
+
+    echo -e "  -> Decrypting and unpacking knowledge vault..."
     "$VENV_DIR/bin/python" -c "
 from pathlib import Path
 from dns_expert.knowledge.crypto import decrypt_file
-src = Path('$HOME/.dns-expert/dns_knowledge.dat')
-dst = Path('$HOME/.dns-expert/dns_knowledge.db')
+src = Path('$KNOWLEDGE_DAT')
+dst = Path('$KNOWLEDGE_DB')
 if src.exists() and (not dst.exists() or dst.stat().st_size == 0):
     decrypt_file(src, dst)
 "
-    echo -e "  ${GREEN}✓${NC} Knowledge vault unpacked successfully."
+    echo -e "  ${GREEN}✓${NC} Knowledge vault decrypted to ${KNOWLEDGE_DB}."
 fi
 
 cat << WRAPPER > "$HOME/.local/bin/dns-expert"

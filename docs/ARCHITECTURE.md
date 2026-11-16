@@ -152,7 +152,84 @@ Formatting Rules:
 
 ---
 
-## 6. Security, Privacy & Air-Gapped Capabilities
+## 6. Security, Privacy & Knowledge Vault Distribution
 
-1. **100% Local Inference**: All queries, embeddings, and completions run on localhost (`127.0.0.1:11434`). No prompts or zone data leave the local machine.
-2. **Air-Gapped Operation**: Once installed, the system requires **zero internet access**. The database `dns_knowledge.db` contains all required text and vector indices.
+### 6a. Privacy & Local Inference
+
+1. **100% Local Inference**: All queries, embeddings, and completions run on localhost (`127.0.0.1:11434`). No prompts, zone data, or configuration snippets leave the local machine.
+2. **Air-Gapped Operation**: Once installed, the system requires **zero internet access**. `dns_knowledge.db` contains all required text and vector indices.
+
+### 6b. Encrypted Knowledge Vault
+
+The compiled knowledge vault is distributed as an AES-256 encrypted, zlib-compressed binary container:
+
+```
+dns_knowledge.dat  →  decrypt_file()  →  dns_knowledge.db
+   (~40 MB, AES-256 + zlib)                (~60 MB SQLite FTS5 + vectors)
+```
+
+**Encryption flow** (`dns_expert/knowledge/crypto.py`):
+
+1. The SQLite database is zlib-compressed in memory.
+2. A 32-byte AES-256 key is derived via PBKDF2-HMAC-SHA256 from an internal seed (embedded in the package at build time) plus a random 16-byte salt.
+3. The compressed payload is encrypted with AES-256-CBC and written with a fixed header containing the salt and HMAC-SHA256 authentication tag.
+4. `decrypt_file()` reverses the process: verifies the HMAC, decrypts, decompresses, and writes `dns_knowledge.db`.
+
+The encryption is **obfuscation-grade**, not secret-key-grade — the derivation seed is embedded in the open-source package. Its purpose is to prevent casual inspection of the corpus content in the binary and to verify vault integrity on every decrypt. Zone data, credentials, and sensitive operational data should never be added to the corpus.
+
+### 6c. Release Asset Distribution
+
+The vault is not committed to the git repository. It is published as a [GitHub Release asset](https://github.com/brettcarr99/dns-expert-model/releases/latest):
+
+| Consideration | Decision |
+| :--- | :--- |
+| **Repository bloat** | At ~40 MB (and growing with corpus updates), committing the binary would slow every `git clone` and inflate history permanently |
+| **Independent versioning** | Corpus refreshes (new RFCs, vendor doc updates) can ship as a new Release asset without a code change |
+| **Git delta compression** | Binary blobs cannot be efficiently delta-compressed; large binary files in git are costly to store and transfer |
+
+**How `install.sh` acquires the vault (Phase 7):**
+
+```
+1. Is ~/.dns-expert/dns_knowledge.db already present and non-empty?  → Skip (already installed)
+2. Is dns_knowledge.dat present locally (./dns_knowledge.dat)?        → Copy it (dev / air-gapped)
+3. Is ~/.dns-expert/dns_knowledge.dat already downloaded?             → Use it (resume / re-install)
+4. Otherwise: curl -fL https://…/releases/latest/download/dns_knowledge.dat
+5. Decrypt dns_knowledge.dat → dns_knowledge.db via crypto.decrypt_file()
+```
+
+---
+
+## 7. Repository Structure
+
+```
+dns-expert-model/
+├── dns_expert/                  # Python package (source, committed to git)
+│   ├── cli.py                   # Argument parsing, REPL, subcommand dispatch
+│   ├── config.py                # Path and Ollama defaults; env-var overrides
+│   ├── ollama_client.py         # urllib-based HTTP client for Ollama API
+│   ├── prompt.py                # RAG prompt assembly and conversation history
+│   ├── utils.py                 # Rich terminal formatting, banner, source table
+│   └── knowledge/
+│       ├── build_index.py       # Corpus builder CLI (dns-expert-builder entry point)
+│       ├── crypto.py            # AES-256 encrypt/decrypt for the .dat container
+│       ├── db.py                # SQLite FTS5 + NumPy vector storage engine
+│       ├── search.py            # Hybrid BM25 + cosine RRF retrieval engine
+│       └── parsers/
+│           ├── rfc_parser.py    # RFC .txt section-aware chunker
+│           ├── doc_parser.py    # RST / Markdown / HTML vendor doc chunker
+│           └── mail_parser.py   # EML / .txt.gz mailing list parser
+├── docs/
+│   ├── ARCHITECTURE.md          # This document
+│   ├── INSTALLATION.md          # Setup guide
+│   └── USAGE_GUIDE.md           # CLI reference and operational examples
+├── tests/                       # unittest test suite (pytest-compatible)
+├── Modelfile                    # Ollama custom model definition
+├── install.sh                   # 1-step installer
+├── pyproject.toml               # Python package metadata and dependencies
+└── .gitignore
+
+# NOT in git — distributed via GitHub Releases or generated locally:
+# ~/.dns-expert/dns_knowledge.dat   AES-256 encrypted knowledge vault (~40 MB)
+# ~/.dns-expert/dns_knowledge.db    Decrypted SQLite knowledge database (~60 MB)
+# .venv/                            Python virtual environment (created by install.sh)
+```

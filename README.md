@@ -14,10 +14,11 @@ It runs entirely on local hardware using **Ollama** within a strict **16GB RAM b
 
 ```bash
 # Clone the repository
-git clone https://github.com/dns-experts/dns-expert.git
-cd dns-expert
+git clone https://github.com/brettcarr99/dns-expert-model.git
+cd dns-expert-model
 
 # Run the automated installer
+# (downloads the ~40 MB encrypted knowledge vault from GitHub Releases automatically)
 ./install.sh
 ```
 
