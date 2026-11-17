@@ -25,36 +25,141 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run incremental RFC sync
+        id: sync
         run: |
           cd ~/dns-experts
-          OLLAMA_HOST=http://127.0.0.1:11434 .venv/bin/python sync_rfcs.py
+          OLLAMA_HOST=http://127.0.0.1:11434 .venv/bin/python sync_rfcs.py 2>&1 | tee /tmp/dns_expert_sync.log
+          # Extract summary line for email
+          ADDED=$(grep -oE '[0-9]+ new chunks' /tmp/dns_expert_sync.log | tail -1 || echo "0 new chunks")
+          NEW_RFCS=$(grep -oE '[0-9]+ new RFC' /tmp/dns_expert_sync.log | tail -1 || echo "0 new RFCs")
+          echo "added=$ADDED" >> $GITHUB_OUTPUT
+          echo "new_rfcs=$NEW_RFCS" >> $GITHUB_OUTPUT
 
       - name: Run evaluation suite
+        id: eval
         run: |
           cd ~/dns-experts
-          OLLAMA_HOST=http://127.0.0.1:11434 .venv/bin/python run_eval.py --db dns_knowledge.db
+          OLLAMA_HOST=http://127.0.0.1:11434 .venv/bin/python run_eval.py --db dns_knowledge.db 2>&1 | tee /tmp/dns_expert_eval.log
+          # Extract pass/fail summary
+          RESULT=$(grep -oE '[0-9]+/[0-9]+ passed' /tmp/dns_expert_eval.log | tail -1 || echo "unknown")
+          echo "result=$RESULT" >> $GITHUB_OUTPUT
 
       - name: Re-encrypt knowledge vault
+        id: encrypt
         run: |
           cd ~/dns-experts
           .venv/bin/python -c "
           from dns_expert.knowledge.crypto import encrypt_file
           from pathlib import Path
           encrypt_file(Path('dns_knowledge.db'), Path('dns_knowledge.dat'))
-          print('✓ Vault re-encrypted')
+          print('Vault re-encrypted')
           "
 
       - name: Create CalVer release
+        id: release
         run: |
           VERSION="v$(date +%Y.%m.%d)"
-          # Update release notes with manifest summary
-          TOTAL=$(python3 -c "import json; m=json.load(open('~/dns-experts/corpus_manifest.json')); print(m['total_chunks'])" 2>/dev/null || echo "unknown")
-          gh release create "$VERSION" ~/dns-experts/dns_knowledge.dat \
+          TOTAL=$(python3 -c "import json; m=json.load(open('${HOME}/dns-experts/corpus_manifest.json')); print(m['total_chunks'])" 2>/dev/null || echo "unknown")
+          if gh release create "$VERSION" ~/dns-experts/dns_knowledge.dat \
             --title "$VERSION — nightly corpus update" \
             --notes "Automated nightly corpus sync. Total chunks: ${TOTAL}. See corpus_manifest.json for full source details." \
-            --latest \
-            || gh release edit "$VERSION" \
-               --notes "Automated nightly corpus sync (re-run). Total chunks: ${TOTAL}." \
-               2>/dev/null || true
+            --latest 2>/dev/null; then
+            echo "tag=$VERSION (new release)" >> $GITHUB_OUTPUT
+          else
+            # Release already exists for today (re-run)
+            gh release upload "$VERSION" ~/dns-experts/dns_knowledge.dat --clobber 2>/dev/null || true
+            echo "tag=$VERSION (updated existing)" >> $GITHUB_OUTPUT
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Send status email
+        if: always()
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SYNC_ADDED:    ${{ steps.sync.outputs.added }}
+          SYNC_NEW_RFCS: ${{ steps.sync.outputs.new_rfcs }}
+          EVAL_RESULT:   ${{ steps.eval.outputs.result }}
+          RELEASE_TAG:   ${{ steps.release.outputs.tag }}
+          SYNC_OUTCOME:    ${{ steps.sync.outcome }}
+          EVAL_OUTCOME:    ${{ steps.eval.outcome }}
+          ENCRYPT_OUTCOME: ${{ steps.encrypt.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, smtplib, textwrap
+          from email.mime.text import MIMEText
+          from datetime import datetime, timezone
+
+          app_password = os.environ.get('GMAIL_APP_PASSWORD', '')
+          if not app_password:
+              print('[!] GMAIL_APP_PASSWORD secret not set — skipping email notification')
+              exit(0)
+
+          # Collect step outcomes
+          outcomes = {
+              'RFC sync':      os.environ.get('SYNC_OUTCOME', 'unknown'),
+              'Eval suite':    os.environ.get('EVAL_OUTCOME', 'unknown'),
+              'Re-encrypt':    os.environ.get('ENCRYPT_OUTCOME', 'unknown'),
+              'Release':       os.environ.get('RELEASE_OUTCOME', 'unknown'),
+          }
+          overall = 'SUCCESS ✅' if all(v in ('success', 'skipped') for v in outcomes.values()) else 'FAILURE ❌'
+
+          # Sync log snippet (last 20 lines)
+          try:
+              with open('/tmp/dns_expert_sync.log') as f:
+                  sync_tail = ''.join(f.readlines()[-20:]).strip()
+          except Exception:
+              sync_tail = '(log unavailable)'
+
+          # Eval log snippet (last 30 lines)
+          try:
+              with open('/tmp/dns_expert_eval.log') as f:
+                  eval_tail = ''.join(f.readlines()[-30:]).strip()
+          except Exception:
+              eval_tail = '(log unavailable)'
+
+          now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+
+          step_lines = '\n'.join(
+              f"  {'✅' if v == 'success' else '⏭️' if v == 'skipped' else '❌'}  {k}: {v}"
+              for k, v in outcomes.items()
+          )
+
+          body = textwrap.dedent(f"""\
+          DNS-Expert Nightly Run — {now}
+          Overall: {overall}
+
+          ─── Steps ───────────────────────────────────
+          {step_lines}
+
+          ─── Corpus ──────────────────────────────────
+          New RFCs:    {os.environ.get('SYNC_NEW_RFCS', 'unknown')}
+          New chunks:  {os.environ.get('SYNC_ADDED', 'unknown')}
+          Eval result: {os.environ.get('EVAL_RESULT', 'unknown')}
+          Release:     {os.environ.get('RELEASE_TAG', 'none')}
+
+          ─── Sync log (last 20 lines) ─────────────────
+          {sync_tail}
+
+          ─── Eval log (last 30 lines) ─────────────────
+          {eval_tail}
+
+          ─── Actions run ─────────────────────────────
+          {os.environ.get('RUN_URL', 'https://github.com/brettcarr99/dns-expert-model/actions')}
+          """)
+
+          subject = f"DNS-Expert nightly: {overall} — {now}"
+
+          msg = MIMEText(body)
+          msg['Subject'] = subject
+          msg['From']    = 'brettcarr@gmail.com'
+          msg['To']      = 'brettcarr@gmail.com'
+
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+              smtp.login('brettcarr@gmail.com', app_password)
+              smtp.send_message(msg)
+
+          print(f'Email sent: {subject}')
+          PYEOF
