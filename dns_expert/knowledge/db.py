@@ -1,10 +1,12 @@
 """SQLite-based Hybrid Vector & Full-Text (FTS5) Storage Engine."""
 
 import array
+import hashlib
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 import numpy as np
 
 from dns_expert.config import DB_PATH, ENCRYPTED_BLOB_PATH, USER_BLOB_PATH
@@ -48,7 +50,7 @@ class KnowledgeDB:
         return con
 
     def _init_db(self) -> None:
-        """Initialize schema: documents table and FTS5 virtual table."""
+        """Initialize schema: documents table, FTS5 virtual table, sync_state table."""
         with self._get_connection() as con:
             con.execute("""
                 CREATE TABLE IF NOT EXISTS documents (
@@ -61,15 +63,25 @@ class KnowledgeDB:
                     date TEXT,
                     url_or_path TEXT,
                     content TEXT NOT NULL,
-                    embedding BLOB
+                    embedding BLOB,
+                    content_hash TEXT               -- sha256(content) for idempotent upsert
                 );
             """)
+
+            # Safely add content_hash column to existing databases (migration)
+            try:
+                con.execute("ALTER TABLE documents ADD COLUMN content_hash TEXT;")
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
             con.execute("""
                 CREATE INDEX IF NOT EXISTS idx_docs_source ON documents (source_type, vendor);
             """)
             con.execute("""
                 CREATE INDEX IF NOT EXISTS idx_docs_source_id ON documents (source_id);
+            """)
+            con.execute("""
+                CREATE INDEX IF NOT EXISTS idx_docs_content_hash ON documents (content_hash);
             """)
 
             fts_exists = con.execute("""
@@ -111,7 +123,21 @@ class KnowledgeDB:
                         VALUES (new.id, new.content, new.title, new.section, new.vendor, new.source_type, new.source_id);
                     END;
                 """)
+
+            # sync_state table: tracks last sync watermark and embed model per source type
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS sync_state (
+                    source_type TEXT PRIMARY KEY,  -- 'rfc', 'vendor_doc', 'discussion', 'draft'
+                    last_sync_ts TEXT,             -- ISO8601 timestamp
+                    upstream_watermark TEXT,       -- RFC index version, git SHA, last message hash, etc.
+                    embed_model TEXT,              -- must match current EMBED_MODEL
+                    embed_dim INTEGER              -- must match EMBEDDING_DIM
+                );
+            """)
+
             con.commit()
+
+    # ── Insertion ─────────────────────────────────────────────────────────────
 
     def insert_chunk(
         self,
@@ -130,13 +156,15 @@ class KnowledgeDB:
         if embedding is not None:
             emb_blob = array.array('f', embedding).tobytes()
 
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
         with self._get_connection() as con:
             cur = con.execute(
                 """
-                INSERT INTO documents (source_type, source_id, title, section, vendor, date, url_or_path, content, embedding)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                INSERT INTO documents (source_type, source_id, title, section, vendor, date, url_or_path, content, embedding, content_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
-                (source_type, source_id, title, section, vendor, date, url_or_path, content, emb_blob),
+                (source_type, source_id, title, section, vendor, date, url_or_path, content, emb_blob, content_hash),
             )
             con.commit()
             return cur.lastrowid
@@ -150,6 +178,9 @@ class KnowledgeDB:
             if emb is not None:
                 emb_blob = array.array('f', emb).tobytes()
 
+            content = ch.get("content", "")
+            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
             rows.append((
                 ch.get("source_type", ""),
                 ch.get("source_id", ""),
@@ -158,20 +189,158 @@ class KnowledgeDB:
                 ch.get("vendor"),
                 ch.get("date"),
                 ch.get("url_or_path"),
-                ch.get("content", ""),
+                content,
                 emb_blob,
+                content_hash,
             ))
 
         with self._get_connection() as con:
             con.executemany(
                 """
-                INSERT INTO documents (source_type, source_id, title, section, vendor, date, url_or_path, content, embedding)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                INSERT INTO documents (source_type, source_id, title, section, vendor, date, url_or_path, content, embedding, content_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 rows,
             )
             con.commit()
         return len(rows)
+
+    # ── Upsert / Idempotent sync ───────────────────────────────────────────────
+
+    @staticmethod
+    def _compute_content_hash(content: str) -> str:
+        """Return sha256 hex digest of content string."""
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    def upsert_chunk(self, chunk_dict: Dict[str, Any]) -> str:
+        """Idempotent upsert for a single chunk.
+
+        Returns:
+            'inserted'  — chunk is new; was inserted
+            'updated'   — source_id existed with different content; old deleted, new inserted
+            'skipped'   — source_id + content_hash identical; no-op
+        """
+        source_id = chunk_dict["source_id"]
+        content = chunk_dict.get("content", "")
+        new_hash = self._compute_content_hash(content)
+
+        emb_blob = None
+        emb = chunk_dict.get("embedding")
+        if emb is not None:
+            emb_blob = array.array('f', emb).tobytes()
+
+        with self._get_connection() as con:
+            existing = con.execute(
+                "SELECT id, content_hash FROM documents WHERE source_id = ? LIMIT 1;",
+                (source_id,),
+            ).fetchone()
+
+            if existing is not None:
+                if existing["content_hash"] == new_hash:
+                    return "skipped"
+                # Content changed — delete all old chunks for this source_id and re-insert
+                con.execute("DELETE FROM documents WHERE source_id = ?;", (source_id,))
+
+            con.execute(
+                """
+                INSERT INTO documents (source_type, source_id, title, section, vendor, date, url_or_path, content, embedding, content_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    chunk_dict.get("source_type", ""),
+                    source_id,
+                    chunk_dict.get("title", ""),
+                    chunk_dict.get("section"),
+                    chunk_dict.get("vendor"),
+                    chunk_dict.get("date"),
+                    chunk_dict.get("url_or_path"),
+                    content,
+                    emb_blob,
+                    new_hash,
+                ),
+            )
+            con.commit()
+
+        return "updated" if existing is not None else "inserted"
+
+    # ── Obsolescence ──────────────────────────────────────────────────────────
+
+    def mark_obsolete(self, source_id: str, superseded_by: str) -> int:
+        """Prefix all chunk titles for source_id with '[OBSOLETED by RFCxxxx] '.
+
+        Returns:
+            Number of chunks updated.
+        """
+        prefix = f"[OBSOLETED by {superseded_by.upper()}] "
+        with self._get_connection() as con:
+            # Only prefix if not already prefixed
+            cur = con.execute(
+                """
+                UPDATE documents
+                SET title = ? || title
+                WHERE source_id = ? AND title NOT LIKE '[OBSOLETED%';
+                """,
+                (prefix, source_id),
+            )
+            con.commit()
+            return cur.rowcount
+
+    # ── Source ID queries ─────────────────────────────────────────────────────
+
+    def get_existing_source_ids(self, source_type: Optional[str] = None) -> Set[str]:
+        """Return a set of all source_ids currently in the DB.
+
+        Args:
+            source_type: If provided, filter to only this source type
+                         (e.g. 'rfc', 'vendor_doc', 'discussion').
+        """
+        if source_type:
+            sql = "SELECT DISTINCT source_id FROM documents WHERE source_type = ?;"
+            params = [source_type]
+        else:
+            sql = "SELECT DISTINCT source_id FROM documents;"
+            params = []
+
+        with self._get_connection() as con:
+            rows = con.execute(sql, params).fetchall()
+        return {r["source_id"] for r in rows}
+
+    # ── Sync state ────────────────────────────────────────────────────────────
+
+    def update_sync_state(
+        self,
+        source_type: str,
+        watermark: str,
+        embed_model: str,
+        embed_dim: int,
+    ) -> None:
+        """Upsert sync metadata for a given source type."""
+        ts = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as con:
+            con.execute(
+                """
+                INSERT INTO sync_state (source_type, last_sync_ts, upstream_watermark, embed_model, embed_dim)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(source_type) DO UPDATE SET
+                    last_sync_ts = excluded.last_sync_ts,
+                    upstream_watermark = excluded.upstream_watermark,
+                    embed_model = excluded.embed_model,
+                    embed_dim = excluded.embed_dim;
+                """,
+                (source_type, ts, watermark, embed_model, embed_dim),
+            )
+            con.commit()
+
+    def get_sync_state(self, source_type: str) -> Optional[Dict[str, Any]]:
+        """Retrieve sync state for a source type, or None if never synced."""
+        with self._get_connection() as con:
+            row = con.execute(
+                "SELECT * FROM sync_state WHERE source_type = ?;",
+                (source_type,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    # ── Vector & FTS retrieval ─────────────────────────────────────────────────
 
     def load_vector_matrix(
         self, source_type: Optional[str] = None, vendor: Optional[str] = None

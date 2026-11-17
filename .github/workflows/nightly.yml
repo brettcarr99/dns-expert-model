@@ -1,0 +1,60 @@
+name: Nightly — Tier B (Corpus Sync + Eval)
+
+# SECURITY: This workflow uses a self-hosted runner on the Mac mini.
+# It MUST NOT trigger on pull_request — that would allow untrusted fork
+# code to execute on the persistent machine with write access to the DB.
+# Only schedule, workflow_dispatch, and push to main are permitted.
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 02:00 UTC daily
+  workflow_dispatch:        # manual trigger from GitHub UI or gh CLI
+  push:
+    branches: [main]
+    paths:
+      - 'sync_rfcs.py'
+      - 'run_eval.py'
+      - 'dns_expert/knowledge/**'
+
+jobs:
+  nightly-sync-eval:
+    name: Corpus Sync & Eval
+    runs-on: [self-hosted, dns-expert-mini]
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run incremental RFC sync
+        run: |
+          cd ~/dns-experts
+          OLLAMA_HOST=http://127.0.0.1:11434 .venv/bin/python sync_rfcs.py
+
+      - name: Run evaluation suite
+        run: |
+          cd ~/dns-experts
+          OLLAMA_HOST=http://127.0.0.1:11434 .venv/bin/python run_eval.py --db dns_knowledge.db
+
+      - name: Re-encrypt knowledge vault
+        run: |
+          cd ~/dns-experts
+          .venv/bin/python -c "
+          from dns_expert.knowledge.crypto import encrypt_file
+          from pathlib import Path
+          encrypt_file(Path('dns_knowledge.db'), Path('dns_knowledge.dat'))
+          print('✓ Vault re-encrypted')
+          "
+
+      - name: Create CalVer release
+        run: |
+          VERSION="v$(date +%Y.%m.%d)"
+          # Update release notes with manifest summary
+          TOTAL=$(python3 -c "import json; m=json.load(open('~/dns-experts/corpus_manifest.json')); print(m['total_chunks'])" 2>/dev/null || echo "unknown")
+          gh release create "$VERSION" ~/dns-experts/dns_knowledge.dat \
+            --title "$VERSION — nightly corpus update" \
+            --notes "Automated nightly corpus sync. Total chunks: ${TOTAL}. See corpus_manifest.json for full source details." \
+            --latest \
+            || gh release edit "$VERSION" \
+               --notes "Automated nightly corpus sync (re-run). Total chunks: ${TOTAL}." \
+               2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

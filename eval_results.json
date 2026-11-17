@@ -1,0 +1,357 @@
+{
+  "run_at": "2026-11-17T20:54:01.225760+00:00",
+  "db_path": "dns_knowledge.db",
+  "total": 15,
+  "passed": 15,
+  "failed": 0,
+  "pass_rate": 1.0,
+  "cases": [
+    {
+      "id": 1,
+      "description": "RFC retrieval \u2014 RFC 9460 SVCB/HTTPS",
+      "query": "What is RFC 9460?",
+      "passed": true,
+      "matched_keyword": "SVCB",
+      "expected_keywords": [
+        "SVCB",
+        "9460",
+        "HTTPS"
+      ],
+      "top_sources": [
+        "rfc9460",
+        "rfc9460",
+        "rfc9460",
+        "rfc9460",
+        "rfc9460",
+        "rfc9460"
+      ],
+      "elapsed_s": 0.051,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 2,
+      "description": "RFC retrieval \u2014 DNS over QUIC",
+      "query": "DNS over QUIC",
+      "passed": true,
+      "matched_keyword": "9250",
+      "expected_keywords": [
+        "9250",
+        "DoQ",
+        "QUIC"
+      ],
+      "top_sources": [
+        "dnsdist/dnsdist/docs/guides/dns-over-quic.rst",
+        "unbound/unbound/source/topics/privacy/dns-over-quic.rst",
+        "dnsdist/dnsdist/docs/advanced/tuning.rst",
+        "rfc9250",
+        "coredns/coredns/plugins/quic.md",
+        "knot-dns/knot-dns/doc/configuration.rst"
+      ],
+      "elapsed_s": 0.04,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 3,
+      "description": "DNSSEC \u2014 NSEC3",
+      "query": "How does NSEC3 work?",
+      "passed": true,
+      "matched_keyword": "NSEC3",
+      "expected_keywords": [
+        "NSEC3",
+        "5155"
+      ],
+      "top_sources": [
+        "rfc6781",
+        "rfc6781",
+        "rfc6781",
+        "rfc7129",
+        "rfc9563",
+        "rfc9276"
+      ],
+      "elapsed_s": 0.022,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 4,
+      "description": "Vendor config \u2014 Unbound QNAME minimisation",
+      "query": "Configure QNAME minimisation in Unbound",
+      "passed": true,
+      "matched_keyword": "qname-minimisation",
+      "expected_keywords": [
+        "qname-minimisation",
+        "qname minimisation",
+        "unbound",
+        "QNAME"
+      ],
+      "top_sources": [
+        "coredns/coredns/explugins/unbound.md",
+        "unbound/unbound/source/reference/todo.rst",
+        "unbound/unbound/source/use-cases/home-resolver.rst",
+        "unbound/unbound/source/getting-started/configuration.rst",
+        "unbound/unbound/source/topics/privacy/dns-over-quic.rst",
+        "unbound/unbound/source/topics/core/monitoring.rst"
+      ],
+      "elapsed_s": 0.028,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 5,
+      "description": "Vendor config \u2014 BIND 9 response policy zone",
+      "query": "BIND 9 response policy zone",
+      "passed": true,
+      "matched_keyword": "response-policy",
+      "expected_keywords": [
+        "response-policy",
+        "bind",
+        "rpz",
+        "RPZ",
+        "response policy"
+      ],
+      "top_sources": [
+        "bind9/bind9/arm/reference.rst",
+        "bind9/bind9/arm/reference.rst",
+        "bind9/bind9/arm/rpz.inc.rst",
+        "bind9/bind9/arm/reference.rst",
+        "bind9/bind9/arm/reference.rst",
+        "bind9/bind9/arm/reference.rst"
+      ],
+      "elapsed_s": 0.02,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 6,
+      "description": "Diagnostic \u2014 SERVFAIL meaning",
+      "query": "What does SERVFAIL mean?",
+      "passed": true,
+      "matched_keyword": "SERVFAIL",
+      "expected_keywords": [
+        "SERVFAIL",
+        "RCODE"
+      ],
+      "top_sources": [
+        "rfc9520",
+        "ietf/dd/<da7d6873-4e05-4fa6-830c-bfc7b1c95bc0@isc.org>",
+        "ietf/dd/<BBCCFDC8-16E7-4309-AFE4-4C6D9A9670B0@strandkip.nl>_p3",
+        "rfc7208",
+        "rfc6604",
+        "unbound/unbound/source/reference/history/info-timeout-server-selection.rst"
+      ],
+      "elapsed_s": 0.018,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 7,
+      "description": "Obsolescence \u2014 TSIG authentication (should cite 8945, not 2845)",
+      "query": "TSIG authentication",
+      "passed": true,
+      "matched_keyword": "8945",
+      "expected_keywords": [
+        "8945",
+        "TSIG"
+      ],
+      "top_sources": [
+        "rfc8945",
+        "pdns-auth/pdns-auth/docs/tsig.rst",
+        "rfc8945",
+        "rfc8945",
+        "rfc3645",
+        "rfc5625"
+      ],
+      "elapsed_s": 0.012,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 8,
+      "description": "Transport \u2014 DNS over TLS",
+      "query": "DNS over TLS configuration",
+      "passed": true,
+      "matched_keyword": "7858",
+      "expected_keywords": [
+        "7858",
+        "DoT",
+        "TLS"
+      ],
+      "top_sources": [
+        "knot-dns/knot-dns/doc/configuration.rst",
+        "knot-resolver/knot-resolver/user/config-network-server-tls.rst",
+        "rfc8310",
+        "rfc7858",
+        "rfc8310",
+        "rfc9103"
+      ],
+      "elapsed_s": 0.03,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 9,
+      "description": "Operational \u2014 DNS amplification mitigation",
+      "query": "DNS amplification attack mitigation",
+      "passed": true,
+      "matched_keyword": "amplification",
+      "expected_keywords": [
+        "amplification",
+        "rate",
+        "mitigation"
+      ],
+      "top_sources": [
+        "rfc7873",
+        "rfc8882",
+        "rfc5358",
+        "rfc8310",
+        "rfc9539",
+        "rfc6950"
+      ],
+      "elapsed_s": 0.027,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 10,
+      "description": "Modern records \u2014 SVCB record format",
+      "query": "SVCB record format",
+      "passed": true,
+      "matched_keyword": "SVCB",
+      "expected_keywords": [
+        "SVCB",
+        "9460"
+      ],
+      "top_sources": [
+        "rfc9460",
+        "rfc9460",
+        "rfc9460",
+        "rfc9460",
+        "rfc9460",
+        "ietf/dd/<SA1PR15MB43708BC07F20D5C17C25B4A7B367A@SA1PR15MB4370.namprd15.prod.outlook.com>"
+      ],
+      "elapsed_s": 0.018,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 11,
+      "description": "EDNS \u2014 Extended DNS errors",
+      "query": "Extended DNS errors",
+      "passed": true,
+      "matched_keyword": "8914",
+      "expected_keywords": [
+        "8914",
+        "EDE",
+        "extended"
+      ],
+      "top_sources": [
+        "rfc8914",
+        "rfc8914",
+        "rfc8914",
+        "rfc8914",
+        "rfc8914",
+        "rfc8914"
+      ],
+      "elapsed_s": 0.025,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 12,
+      "description": "Zone transfer \u2014 XoT over TLS",
+      "query": "XoT zone transfer over TLS",
+      "passed": true,
+      "matched_keyword": "9103",
+      "expected_keywords": [
+        "9103",
+        "XoT",
+        "zone transfer"
+      ],
+      "top_sources": [
+        "rfc9103",
+        "rfc9103",
+        "rfc9103",
+        "rfc9103",
+        "rfc9103",
+        "rfc9103"
+      ],
+      "elapsed_s": 0.025,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 13,
+      "description": "Negative cache \u2014 DNS failures caching",
+      "query": "negative caching DNS failures",
+      "passed": true,
+      "matched_keyword": "9520",
+      "expected_keywords": [
+        "9520",
+        "negative",
+        "NXDOMAIN",
+        "caching"
+      ],
+      "top_sources": [
+        "rfc9520",
+        "rfc9520",
+        "rfc9520",
+        "rfc9520",
+        "rfc9520",
+        "rfc9520"
+      ],
+      "elapsed_s": 0.027,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 14,
+      "description": "Vendor config \u2014 PowerDNS recursor",
+      "query": "PowerDNS recursor configuration",
+      "passed": true,
+      "matched_keyword": "recursor",
+      "expected_keywords": [
+        "recursor",
+        "pdns",
+        "PowerDNS"
+      ],
+      "top_sources": [
+        "pdns-recursor/pdns-recursor/docs/getting-started.rst",
+        "pdns-recursor/pdns-recursor/docs/config.rst",
+        "pdns-recursor/pdns-recursor/docs/manpages/pdns_recursor.1.rst",
+        "pdns-recursor/pdns-recursor/docs/running.rst",
+        "pdns-recursor/pdns-recursor/docs/manpages/rec_control.1.rst",
+        "pdns-recursor/pdns-recursor/docs/manpages/pdns_recursor.1.rst"
+      ],
+      "elapsed_s": 0.019,
+      "error": "",
+      "is_negative": false
+    },
+    {
+      "id": 15,
+      "description": "Negative test \u2014 Python pandas DataFrame merge (unrelated to DNS)",
+      "query": "Python pandas DataFrame merge groupby machine learning neural network",
+      "passed": true,
+      "matched_keyword": "",
+      "expected_keywords": [
+        "pandas",
+        "DataFrame",
+        "groupby",
+        "scikit-learn",
+        "neural network weights"
+      ],
+      "top_sources": [
+        "knot-dns/knot-dns/doc/migration.rst",
+        "rfc6762",
+        "rfc3492",
+        "unbound/unbound/source/developer/python-modules.rst",
+        "rfc9241",
+        "pdns-recursor/pdns-recursor/docs/lua-scripting/netmask.rst"
+      ],
+      "elapsed_s": 0.021,
+      "error": "",
+      "is_negative": true
+    }
+  ]
+}
