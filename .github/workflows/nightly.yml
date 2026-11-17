@@ -29,11 +29,20 @@ jobs:
         run: |
           cd ~/dns-experts
           OLLAMA_HOST=http://127.0.0.1:11434 .venv/bin/python sync_rfcs.py 2>&1 | tee /tmp/dns_expert_sync.log
-          # Extract summary line for email
+          # Extract summary lines for email
           ADDED=$(grep -oE '[0-9]+ new chunks' /tmp/dns_expert_sync.log | tail -1 || echo "0 new chunks")
           NEW_RFCS=$(grep -oE '[0-9]+ new RFC' /tmp/dns_expert_sync.log | tail -1 || echo "0 new RFCs")
+          MAX_RFC=$(python3 -c "
+          import sqlite3, re
+          conn = sqlite3.connect('/Users/brettcarr/dns-experts/dns_knowledge.db')
+          rows = conn.execute(\"SELECT source_id FROM documents WHERE source_type='rfc'\").fetchall()
+          nums = [int(m.group(1)) for r in rows for m in [re.search(r'rfc(\d+)', r[0])] if m]
+          print(f'RFC {max(nums)}' if nums else 'unknown')
+          conn.close()
+          " 2>/dev/null || echo "unknown")
           echo "added=$ADDED" >> $GITHUB_OUTPUT
           echo "new_rfcs=$NEW_RFCS" >> $GITHUB_OUTPUT
+          echo "max_rfc=$MAX_RFC" >> $GITHUB_OUTPUT
 
       - name: Run evaluation suite
         id: eval
@@ -79,6 +88,7 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           SYNC_ADDED:    ${{ steps.sync.outputs.added }}
           SYNC_NEW_RFCS: ${{ steps.sync.outputs.new_rfcs }}
+          SYNC_MAX_RFC:  ${{ steps.sync.outputs.max_rfc }}
           EVAL_RESULT:   ${{ steps.eval.outputs.result }}
           RELEASE_TAG:   ${{ steps.release.outputs.tag }}
           SYNC_OUTCOME:    ${{ steps.sync.outcome }}
@@ -135,10 +145,11 @@ jobs:
           {step_lines}
 
           ─── Corpus ──────────────────────────────────
-          New RFCs:    {os.environ.get('SYNC_NEW_RFCS', 'unknown')}
-          New chunks:  {os.environ.get('SYNC_ADDED', 'unknown')}
-          Eval result: {os.environ.get('EVAL_RESULT', 'unknown')}
-          Release:     {os.environ.get('RELEASE_TAG', 'none')}
+          New RFCs:      {os.environ.get('SYNC_NEW_RFCS', 'unknown')}
+          New chunks:    {os.environ.get('SYNC_ADDED', 'unknown')}
+          Current to:    {os.environ.get('SYNC_MAX_RFC', 'unknown')}
+          Eval result:   {os.environ.get('EVAL_RESULT', 'unknown')}
+          Release:       {os.environ.get('RELEASE_TAG', 'none')}
 
           ─── Sync log (last 20 lines) ─────────────────
           {sync_tail}
