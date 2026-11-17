@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Incremental RFC sync — adds new DNS RFCs to the knowledge DB without re-embedding existing ones.
+"""Incremental RFC sync — fetches new DNS RFCs from the IETF and adds them to the knowledge DB.
 
 Usage:
     ~/dns-experts/.venv/bin/python ~/dns-experts/sync_rfcs.py
 
 The script:
+  0. Fetches rfc-index.xml from rfc-editor.org; downloads any DNS-relevant RFCs
+     not yet in rfcs/clean/ (filtered by WG membership and keyword matching).
   1. Finds all rfc*.txt files in rfcs/clean/ not yet present in the DB (by source_id).
   2. Parses each with RFCParser (section-aware chunking).
   3. Skips any chunk whose source_id+content_hash is already in the DB (upsert-safe).
@@ -13,6 +15,11 @@ The script:
   6. Marks obsoleted RFCs with [OBSOLETED by RFCxxxx] prefix on titles.
   7. Updates sync_state table and writes corpus_manifest.json.
   8. Prints progress and a final summary.
+
+DNS relevance filter (step 0):
+  - WG membership: dnsop, dprive, add, dnssd, dane, dnsbis, deleg, dnspriv, homenet
+  - Keyword match in title/abstract: dns, dnssec, resolver, svcb, edns, dane, nsec, etc.
+  - Include-if-in-doubt policy (broader is better for a DNS specialist tool).
 """
 
 import json
@@ -21,6 +28,8 @@ import sys
 import os
 import time
 import sqlite3
+import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -42,7 +51,169 @@ from dns_expert.config import EMBED_MODEL, EMBEDDING_DIM
 CLEAN_DIR     = BASE_DIR / 'rfcs' / 'clean'
 META_PATH     = BASE_DIR / 'rfcs' / 'metadata' / 'dns_rfcs_filtered.json'
 DB_PATH       = BASE_DIR / 'dns_knowledge.db'
+RAW_DIR       = BASE_DIR / 'rfcs' / 'raw'
 MANIFEST_PATH = BASE_DIR / 'corpus_manifest.json'
+
+# ── RFC fetch settings ─────────────────────────────────────────────────────────
+RFC_INDEX_URL = 'https://www.rfc-editor.org/rfc/rfc-index.xml'
+RFC_TEXT_URL  = 'https://www.rfc-editor.org/rfc/{name}.txt'
+FETCH_DELAY   = 1.2   # seconds between downloads — polite pacing
+
+# Working groups whose output is always DNS-relevant
+DNS_WGS = {
+    'dnsop', 'dprive', 'add', 'dnssd', 'dane',
+    'dnsbis', 'deleg', 'dnspriv', 'homenet',
+}
+
+# Keywords that mark a title/abstract as DNS-relevant (checked lowercased)
+DNS_KEYWORDS = [
+    'dns', 'dnssec', 'domain name', 'resolver', 'nameserver', 'name server',
+    'svcb', 'https record', 'doh', 'dns over https', 'dns over tls',
+    'dns over quic', 'dot ', ' dot,', 'doq', 'edns', 'dane',
+    'response policy zone', 'rpz', 'mdns', 'multicast dns', 'nxdomain',
+    'nsec', 'dnskey', 'zone transfer', 'delegation signer',
+    'resource record', 'rrtype', 'authoritative', 'recursive resolver',
+    'stub resolver', 'negative caching', 'dns error', 'dns cookie',
+]
+
+
+def _is_dns_relevant(title: str, abstract: str, wg: str) -> bool:
+    """Return True if the RFC is DNS-relevant by WG membership or keyword match."""
+    if wg.lower() in DNS_WGS:
+        return True
+    text = (title + ' ' + abstract).lower()
+    return any(kw in text for kw in DNS_KEYWORDS)
+
+
+def fetch_new_rfcs(clean_dir: Path, raw_dir: Path, meta_path: Path) -> list:
+    """
+    Download DNS-relevant RFC text files not yet present in rfcs/clean/.
+
+    1. Fetches rfc-index.xml from rfc-editor.org.
+    2. Identifies DNS-relevant RFCs whose text isn't already on disk.
+    3. Downloads each with polite 1.2s pacing.
+    4. Updates dns_rfcs_filtered.json with new entries.
+
+    Returns list of Path objects for newly downloaded files.
+    """
+    # RFC numbers already on disk
+    existing_nums: set = set()
+    for f in clean_dir.glob('rfc*.txt'):
+        m = re.search(r'rfc(\d+)', f.name, re.IGNORECASE)
+        if m:
+            existing_nums.add(int(m.group(1)))
+
+    max_existing = max(existing_nums) if existing_nums else 0
+    print(f'\n── RFC index fetch (highest on disk: RFC {max_existing}) ──────────────────')
+
+    try:
+        req = urllib.request.Request(RFC_INDEX_URL, headers={'User-Agent': 'dns-expert-sync/1.1'})
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            xml_data = resp.read()
+        print(f'  ✓ rfc-index.xml fetched ({len(xml_data) // 1024} KB)')
+    except Exception as e:
+        print(f'  ✗ Could not fetch RFC index: {e} — skipping download step')
+        return []
+
+    root = ET.fromstring(xml_data)
+
+    # Detect namespace (rfc-editor uses http://www.rfc-editor.org/rfc-index)
+    ns_uri = ''
+    if root.tag.startswith('{'):
+        ns_uri = root.tag.split('}')[0].lstrip('{')
+
+    def _tag(name: str) -> str:
+        return f'{{{ns_uri}}}{name}' if ns_uri else name
+
+    def _text(el, tag: str, default: str = '') -> str:
+        child = el.find(_tag(tag))
+        return child.text.strip() if child is not None and child.text else default
+
+    # Load existing metadata for update
+    existing_meta: list = []
+    if meta_path.exists():
+        raw = json.loads(meta_path.read_text())
+        existing_meta = raw if isinstance(raw, list) else list(raw.values())
+    existing_meta_nums = {str(e.get('rfc', '')) for e in existing_meta}
+
+    candidates = []
+    for entry in root.iter(_tag('rfc-entry')):
+        doc_id = _text(entry, 'doc-id')
+        if not doc_id.upper().startswith('RFC'):
+            continue
+        try:
+            rfc_num = int(doc_id[3:])
+        except ValueError:
+            continue
+
+        if rfc_num in existing_nums:
+            continue  # already on disk
+
+        title    = _text(entry, 'title')
+        wg       = _text(entry, 'wg-acronym')
+
+        abstract_el = entry.find(_tag('abstract'))
+        abstract = ' '.join(t.strip() for t in abstract_el.itertext()) if abstract_el is not None else ''
+
+        date_el = entry.find(_tag('date'))
+        year = _text(date_el, 'year') if date_el is not None else ''
+
+        obs_el = entry.find(_tag('obsoleted-by'))
+        obsoleted_by = None
+        if obs_el is not None:
+            obs_doc = _text(obs_el, 'doc-id')
+            if obs_doc.upper().startswith('RFC'):
+                obsoleted_by = obs_doc[3:]
+
+        if not _is_dns_relevant(title, abstract, wg):
+            continue
+
+        candidates.append({
+            'rfc': rfc_num, 'title': title, 'wg': wg,
+            'year': year, 'obsoleted_by': obsoleted_by, 'status': 'STANDARD',
+        })
+
+    if not candidates:
+        print('  ✓ No new DNS RFCs found in index')
+        return []
+
+    print(f'  → {len(candidates)} new DNS-relevant RFCs identified')
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    new_files = []
+
+    for i, cand in enumerate(candidates, 1):
+        rfc_num  = cand['rfc']
+        name     = f'rfc{rfc_num}'
+        url      = RFC_TEXT_URL.format(name=name)
+        raw_path   = raw_dir   / f'{name}.txt'
+        clean_path = clean_dir / f'{name}.txt'
+
+        if clean_path.exists():
+            new_files.append(clean_path)
+            continue
+
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'dns-expert-sync/1.1'})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                text = resp.read().decode('utf-8', errors='ignore')
+            raw_path.write_text(text, encoding='utf-8')
+            clean_path.write_text(text, encoding='utf-8')
+            new_files.append(clean_path)
+            print(f'  [{i:3d}/{len(candidates)}] {name} — "{cand["title"][:55]}" ✓')
+        except Exception as e:
+            print(f'  [{i:3d}/{len(candidates)}] {name} — download failed: {e}')
+
+        if i < len(candidates):
+            time.sleep(FETCH_DELAY)
+
+    # Update metadata JSON with new entries
+    for cand in candidates:
+        if str(cand['rfc']) not in existing_meta_nums:
+            existing_meta.append(cand)
+    meta_path.write_text(json.dumps(existing_meta, indent=2))
+    print(f'  ✓ dns_rfcs_filtered.json updated — {len(existing_meta)} total entries')
+
+    return new_files
 
 # ── Known obsolescence pairs (source_id → superseded-by source_id)
 # Source: RFC Editor status pages. Supplements metadata when 'obsoleted_by' field absent.
@@ -139,6 +310,15 @@ def main():
     print("=" * 70)
     print("DNS Expert — Incremental RFC Sync")
     print("=" * 70)
+
+    # 0. Fetch any new DNS RFCs from the IETF RFC index
+    newly_downloaded = fetch_new_rfcs(CLEAN_DIR, RAW_DIR, META_PATH)
+    if newly_downloaded:
+        print(f'\n✓ {len(newly_downloaded)} new RFC text file(s) downloaded and ready to index')
+        # Reload metadata now it's been updated
+        rfc_meta = load_rfc_metadata(META_PATH)
+    else:
+        print('\n✓ RFC index checked — corpus is current')
 
     # 1. Connect to DB
     db = KnowledgeDB(DB_PATH, auto_unpack=False)
