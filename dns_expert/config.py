@@ -23,7 +23,24 @@ ENCRYPTED_BLOB_PATH = DEFAULT_WORKSPACE_ROOT / "dns_knowledge.dat"
 USER_BLOB_PATH = DEFAULT_DATA_DIR / "dns_knowledge.dat"
 
 # Ollama Settings
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+# Sanitise OLLAMA_HOST: the env var is also used by the Ollama *server* as a
+# listen address (e.g. "0.0.0.0:11434"), which is not a valid client URL.
+# If the value lacks a scheme we normalise it to a proper http:// URL, falling
+# back to localhost if the raw value is unusable (bare "0.0.0.0", empty, etc.).
+def _resolve_ollama_host() -> str:
+    raw = os.environ.get("OLLAMA_HOST", "").strip()
+    if not raw:
+        return "http://127.0.0.1:11434"
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return raw.rstrip("/")
+    # Bare host or host:port (e.g. "0.0.0.0:11434", "192.168.1.1:11434")
+    # "0.0.0.0" is a listen-all bind address — meaningless for a client; use localhost.
+    host_part = raw.split(":")[0]
+    if host_part in ("0.0.0.0", ""):
+        return "http://127.0.0.1:11434"
+    return f"http://{raw}"
+
+OLLAMA_HOST = _resolve_ollama_host()
 CHAT_MODEL = os.environ.get("DNS_EXPERT_MODEL", "dns-expert")
 FALLBACK_CHAT_MODELS = ["dns-expert", "llama3.1:8b", "qwen2.5:7b", "qwen2.5:14b", "mistral:7b"]
 EMBED_MODEL = os.environ.get("DNS_EXPERT_EMBED_MODEL", "nomic-embed-text")
