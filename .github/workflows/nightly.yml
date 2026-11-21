@@ -40,9 +40,17 @@ jobs:
           print(f'RFC {max(nums)}' if nums else 'unknown')
           conn.close()
           " 2>/dev/null || echo "unknown")
+          # Extract list of newly indexed RFCs (number + title) from download log lines
+          NEW_RFC_LIST=$(grep -E '^\s+\[[ 0-9]+/[ 0-9]+\] rfc[0-9]+ — ".+" ✓' /tmp/dns_expert_sync.log \
+            | sed -E 's/.*\[[ 0-9]+\/[ 0-9]+\] (rfc[0-9]+) — "(.+)" ✓/  \1 — \2/' \
+            || echo "")
           echo "added=$ADDED" >> $GITHUB_OUTPUT
           echo "new_rfcs=$NEW_RFCS" >> $GITHUB_OUTPUT
           echo "max_rfc=$MAX_RFC" >> $GITHUB_OUTPUT
+          # Multi-line output requires EOF delimiter syntax
+          echo "new_rfc_list<<__EOF__" >> $GITHUB_OUTPUT
+          echo "$NEW_RFC_LIST" >> $GITHUB_OUTPUT
+          echo "__EOF__" >> $GITHUB_OUTPUT
 
       - name: Run evaluation suite
         id: eval
@@ -89,6 +97,7 @@ jobs:
           SYNC_ADDED:    ${{ steps.sync.outputs.added }}
           SYNC_NEW_RFCS: ${{ steps.sync.outputs.new_rfcs }}
           SYNC_MAX_RFC:  ${{ steps.sync.outputs.max_rfc }}
+          SYNC_NEW_RFC_LIST: ${{ steps.sync.outputs.new_rfc_list }}
           EVAL_RESULT:   ${{ steps.eval.outputs.result }}
           RELEASE_TAG:   ${{ steps.release.outputs.tag }}
           SYNC_OUTCOME:    ${{ steps.sync.outcome }}
@@ -150,6 +159,9 @@ jobs:
           Current to:    {os.environ.get('SYNC_MAX_RFC', 'unknown')}
           Eval result:   {os.environ.get('EVAL_RESULT', 'unknown')}
           Release:       {os.environ.get('RELEASE_TAG', 'none')}
+
+          ─── New RFCs indexed ────────────────────────
+          {os.environ.get('SYNC_NEW_RFC_LIST', '').strip() or '  (none — corpus already up to date)'}
 
           ─── Sync log (last 20 lines) ─────────────────
           {sync_tail}
